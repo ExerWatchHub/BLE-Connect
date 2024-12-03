@@ -142,6 +142,7 @@ dependencies:
       - argparse==1.4.0
       - bleak==0.22.3
       - dearpygui==2.0.0
+      - dearpygui-ext==2.0.0
       - pyobjc-framework-corebluetooth==10.3.2
       - pyobjc-framework-libdispatch==10.3.2
-prefix: /Users/gabrielem/mambaforge/envs/exer-ble
+prefix: /Users/gabryxx7/miniforge3/envs/exer-ble
