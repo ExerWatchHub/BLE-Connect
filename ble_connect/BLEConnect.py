@@ -93,8 +93,8 @@ class BLEConnect:
 
         # demo.show_demo()
         # dpg.configure_item("__demo_id", collapsed=True)
-        dpg.show_style_editor()
-        dpg.show_font_manager()
+        # dpg.show_style_editor()
+        # dpg.show_font_manager()
         
         self.make_window("main_window")
         self.setup_bg_loop()
