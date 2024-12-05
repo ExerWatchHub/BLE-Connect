@@ -16,7 +16,6 @@ class IMUDataWidget:
     def __init__(self, app, device_widget):
         self.app = app
         self.themes = self.app.themes
-        self.fonts = self.app.fonts
         self.device_widget = device_widget
         self.device = device_widget.device
         self.tag = f"{self.device.address}_imu_widget"
@@ -25,7 +24,7 @@ class IMUDataWidget:
         with dpg.group(parent=container, horizontal=True, tag=self.tag):
             dpg.add_text(tag=f"{self.tag}_title", default_value=self.device.name)
             dpg.add_button(tag=f"{self.tag}_button", label="Connect", callback=self.device_widget.connect_button_callback, user_data=self.device, enabled=True, show=True)
-            dpg.bind_item_font(f"{self.tag}_title", self.fonts.title_font)
+            dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
         dpg.add_text(parent=container, tag=f"{self.tag}_imu_string", default_value="IMU Data")
         with dpg.table(parent=container, header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=False):
             dpg.add_table_column()
@@ -59,10 +58,9 @@ class IMUDataWidget:
 
 
 class BLEDeviceWidget:
-    def __init__(self, app, device: BLEDevice, data: AdvertisementData = None, foldout_container: str = None, panel_container: str = None):
+    def __init__(self, app, device: BLEDevice, data: AdvertisementData = None, foldout_container: str = None, panel_container: str = None, exer_sensors_container: str = None):
         self.app = app
         self.themes = self.app.themes
-        self.fonts = self.app.fonts
         self.theme = self.themes.generic_device
         self.foldout_tag = f"{device.address}_foldout"
         self.selectable_tag = f"{device.address}_selectable"
@@ -73,6 +71,7 @@ class BLEDeviceWidget:
         self.client: BleakClient = BleakClient(device.address)
         self.foldout_container = foldout_container
         self.panel_container = panel_container
+        self.exer_sensors_container = exer_sensors_container
         self.on_click = None
         self.handler_registry = dpg.add_item_handler_registry()
         self.click_handler = -1
@@ -93,14 +92,19 @@ class BLEDeviceWidget:
             self.on_click(sender, app_data, self)
         except Exception as e:
             print(f"Exception on click: {e}")
+            
+    def imu_widget(self, container: str = None):
+        container = self.exer_sensors_container if container is None else container
+        self.imu_data.add_widget(container)
 
-    def device_info(self, container: str):
+    def device_info(self, container: str = None):
+        container = self.panel_container if container is None else container
         try:
             dpg.delete_item(container, children_only=True)
         except Exception as e:
             print(f"Exception deleting items: {e}")
         with dpg.group(parent=container, tag=self.panel_tag) as grp:
-            self.imu_data.add_widget(grp)
+            # self.imu_widget(grp)
             dpg.add_text(tag=f"{self.panel_tag}_address", default_value=f"{self.device.address}")
             dpg.add_text(tag=f"{self.panel_tag}_name", default_value=f"{self.device.name}")
             dpg.add_text(tag=f"{self.panel_tag}_service_uuids", default_value=f"{self.data.service_uuids}")
@@ -110,7 +114,8 @@ class BLEDeviceWidget:
             dpg.add_text(tag=f"{self.panel_tag}_rssi", default_value=f"{self.data.rssi}")
             dpg.add_text(tag=f"{self.panel_tag}_services", default_value=f"{self.data.rssi}")
 
-    def foldout_info(self, container: str):
+    def foldout_info(self, container: str = None):
+        container = self.foldout_container if container is None else container
         with dpg.group(parent=container, filter_key=f"{self.device.name}", horizontal=True, tag=self.foldout_tag) as grp:
             dpg.add_button(tag=self.button_tag, label=f"Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=False)
             dpg.add_collapsing_header(label=f"{self.device.name} ({self.device.address})", tag=self.selectable_tag, closable=False, leaf=True)
