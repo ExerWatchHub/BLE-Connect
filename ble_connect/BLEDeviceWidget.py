@@ -31,11 +31,12 @@ class BLEDeviceWidget:
         self.on_click = None
         self.handler_registry = dpg.add_item_handler_registry()
         self.click_handler = -1
-        self.imu_data = IMUDataWidget(app, self.device, self.connect_button_callback)
+        self.imu_data = IMUDataWidget(app, self, self.connect_button_callback)
         # self.imu_data2 = IMUDataWidget(app, self.device, self.connect_button_callback, "copy")
         self.widget_added = False
         self.is_exerwatch = False
         self.is_selected = False
+        self.is_connected = False
         if self.foldout_container is not None:
             self.foldout_info(self.foldout_container)
             
@@ -93,16 +94,17 @@ class BLEDeviceWidget:
         await self.client.stop_notify(CHARACTERISTIC_UUID_TX)
         await self.client.disconnect()
         dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address})")
-        dpg.configure_item(self.button_tag, enabled=True)
+        dpg.configure_item(self.button_tag, label="Connect")
 
     async def connect(self, device):
         try:
             print(f"Connecting to {device.address}")
             await self.client.connect()
+            self.is_connected = True
+            dpg.configure_item(self.button_tag, label="Disconnect")
         except Exception as e:
             print(f"Exception connecting to device: {device}: {e}")
             return
-        dpg.configure_item(self.button_tag, enabled=False)
         # Start receiving notifications on the GATT characteristic advertising the sensor's IMU data
         try:
             await self.client.start_notify(CHARACTERISTIC_UUID_TX, self.notification_handler)
