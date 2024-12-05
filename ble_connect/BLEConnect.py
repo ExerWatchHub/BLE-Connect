@@ -50,8 +50,8 @@ class BLEConnect:
     def on_device_detected(self, device: BLEDevice, data: AdvertisementData):
         if not dpg.is_dearpygui_running():
             return
-        # print(f"Device detected: {device}")
         if device.address not in self.devices:
+            # print(f"Device detected: {device}")
             device_ui = BLEDeviceWidget(self, device, data, self.filter_tag, self.device_info_tag, self.exer_sensors_row)
             device_ui.on_click = self.on_device_click
             self.devices[device.address] = device_ui
@@ -68,9 +68,11 @@ class BLEConnect:
 
         self.setup_bg_loop()
 
-        dpg.start_dearpygui()  # below replaces, start_dearpygui()
-        # while dpg.is_dearpygui_running():
-        #     dpg.render_dearpygui_frame()  # insert here any code you would like to run in the render loop you can manually stop by using stop_dearpygui()
+        # dpg.start_dearpygui()  # below replaces, start_dearpygui()
+        while dpg.is_dearpygui_running():
+            jobs = dpg.get_callback_queue()  # retrieves and clears queue
+            dpg.run_callbacks(jobs)
+            dpg.render_dearpygui_frame()
         dpg.destroy_context()
 
         self.bg_loop.call_soon_threadsafe(self.bg_loop.stop)

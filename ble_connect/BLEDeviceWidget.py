@@ -10,7 +10,7 @@ import asyncio
 import typing
 import platform
 from .IMUDataWidget import IMUDataWidget
-from .config import EXER_BLE_SERVICE_UUID, CHARACTERISTIC_UUID_TX, CHARACTERISTIC_UUID_RX
+from .config import EXER_BLE_SERVICE_UUID, CHARACTERISTIC_UUID_TX, CHARACTERISTIC_UUID_RX, TEST_SERVICE_UUIDS
 
 
 class BLEDeviceWidget:
@@ -143,7 +143,7 @@ class BLEDeviceWidget:
         if data is None or self.is_exerwatch:
             return
         self.data = data
-        self.is_exerwatch = any(map(lambda x: x.upper() == EXER_BLE_SERVICE_UUID, data.service_uuids))
+        self.is_exerwatch = any(map(lambda x: x.upper() in [EXER_BLE_SERVICE_UUID]+TEST_SERVICE_UUIDS, data.service_uuids))
         if self.is_exerwatch:
             self.update_theme()
             for i in range(len(self.app.devices.keys())):
