@@ -15,10 +15,10 @@ class BLEConnect:
         dpg.create_context()
         self.connected_device = None
         self.devices: dict[str, BLEDeviceWidget] = {}
-        self.devices_list_id = dpg.generate_uuid()
-        self.device_info_tag = dpg.generate_uuid()
-        self.exer_sensors_table = dpg.generate_uuid()
-        self.exer_sensors_row = dpg.generate_uuid()
+        self.devices_list_id = "devices_list"
+        self.device_info_tag = "devices_info"
+        self.exer_sensors_table = "exer_sensors_table"
+        self.exer_sensors_row = "exer_sensors_row"
         self.bg_loop = None
         self.scan_loading = "ble_scan_loading"
         self.filter_tag = "devices_filter"
@@ -48,6 +48,8 @@ class BLEConnect:
             d.set_selected(d.click_handler == sender)
 
     def on_device_detected(self, device: BLEDevice, data: AdvertisementData):
+        if not dpg.is_dearpygui_running():
+            return
         # print(f"Device detected: {device}")
         if device.address not in self.devices:
             device_ui = BLEDeviceWidget(self, device, data, self.filter_tag, self.device_info_tag, self.exer_sensors_row)
@@ -60,33 +62,34 @@ class BLEConnect:
         dpg.setup_dearpygui()
         dpg.show_viewport()
 
-        self.themes = BLEConnectTheme()
-
-        # demo.show_demo()
-        # dpg.configure_item("__demo_id", collapsed=True)
-        # dpg.show_style_editor()
-        # dpg.show_font_manager()
-        
-        self.make_window("main_window")
-        self.setup_bg_loop()
+        self.themes = BLEConnectTheme()        
+        self.make_window("main_window", False)
         # self.run_scan(None)
 
-        dpg.start_dearpygui()
+        self.setup_bg_loop()
+
+        dpg.start_dearpygui()  # below replaces, start_dearpygui()
+        # while dpg.is_dearpygui_running():
+        #     dpg.render_dearpygui_frame()  # insert here any code you would like to run in the render loop you can manually stop by using stop_dearpygui()
         dpg.destroy_context()
 
         self.bg_loop.call_soon_threadsafe(self.bg_loop.stop)
 
 
-    def make_window(self, tag):
+    def make_window(self, tag, show_demo=False):
         with dpg.window(label="Example Window", tag=tag, autosize=True, menubar=self.menubar):
             dpg.bind_font(self.themes.body_font)
             if self.menubar:
                 with dpg.menu_bar():
                     dpg.add_menu(label="Menu Options")
                     
-            with dpg.table(tag=self.exer_sensors_table, header_row=False, borders_innerH=True, borders_outerH=False, borders_innerV=True, borders_outerV=False, resizable=False):
-                dpg.add_table_column()
-                dpg.table_row(tag=self.exer_sensors_row)
+            with dpg.child_window(autosize_x=True, auto_resize_y=True) as cw:
+                with dpg.group(horizontal=True) as grp:
+                    self.exer_sensors_row = grp
+                # with dpg.table(header_row=False, borders_innerH=True, borders_outerH=False, borders_innerV=True, borders_outerV=False, resizable=False):
+                #     with dpg.table_row() as tw:
+                #         self.exer_sensors_row = tw 
+                #         dpg.add_text("BLE Devices")
 
             with dpg.table(header_row=False, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=True):
                 dpg.add_table_column()
@@ -95,7 +98,13 @@ class BLEConnect:
                 with dpg.table_row():
                     self.devices_list()
                     self.device_details()
-        dpg.set_primary_window(tag, True)
+        if show_demo:
+            demo.show_demo()
+            # dpg.configure_item("__demo_id", collapsed=True)
+            # dpg.show_style_editor()
+            # dpg.show_font_manager()
+        else:
+            dpg.set_primary_window(tag, True)
 
     def devices_list(self):
         with dpg.group():

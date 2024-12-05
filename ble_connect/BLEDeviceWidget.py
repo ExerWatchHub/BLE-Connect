@@ -9,52 +9,8 @@ from threading import Thread
 import asyncio
 import typing
 import platform
+from .IMUDataWidget import IMUDataWidget
 from .config import EXER_BLE_SERVICE_UUID, CHARACTERISTIC_UUID_TX, CHARACTERISTIC_UUID_RX
-
-
-class IMUDataWidget:
-    def __init__(self, app, device_widget):
-        self.app = app
-        self.themes = self.app.themes
-        self.device_widget = device_widget
-        self.device = device_widget.device
-        self.tag = f"{self.device.address}_imu_widget"
-        
-    def add_widget(self, container: str):
-        with dpg.group(parent=container, horizontal=True, tag=self.tag):
-            dpg.add_text(tag=f"{self.tag}_title", default_value=self.device.name)
-            dpg.add_button(tag=f"{self.tag}_button", label="Connect", callback=self.device_widget.connect_button_callback, user_data=self.device, enabled=True, show=True)
-            dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
-        dpg.add_text(parent=container, tag=f"{self.tag}_imu_string", default_value="IMU Data")
-        with dpg.table(parent=container, header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=False):
-            dpg.add_table_column()
-            dpg.add_table_column(label="X")
-            dpg.add_table_column(label="Y")
-            dpg.add_table_column(label="Z")
-
-            with dpg.table_row():
-                dpg.add_text("Accl")
-                dpg.add_input_float(tag=f"{self.tag}_accel_x", default_value=0.0, width=100, readonly=True, step=0)
-                dpg.add_input_float(tag=f"{self.tag}_accel_y", default_value=0.0, width=100, readonly=True, step=0)
-                dpg.add_input_float(tag=f"{self.tag}_accel_z", default_value=0.0, width=100, readonly=True, step=0)
-
-            with dpg.table_row():
-                dpg.add_text("Gyro")
-                dpg.add_input_float(tag=f"{self.tag}_gyr_x", default_value=0.0, width=100, readonly=True, step=0)
-                dpg.add_input_float(tag=f"{self.tag}_gyr_y", default_value=0.0, width=100, readonly=True, step=0)
-                dpg.add_input_float(tag=f"{self.tag}_gyr_z", default_value=0.0, width=100, readonly=True, step=0)
-    
-    def update(self, byte_data: bytearray, start_idx: int = 1):
-        if byte_data is not None:
-            decoded = byte_data.decode('utf-8')
-            data = [float(i) for i in decoded.split(",")]
-            dpg.set_value(f"{self.tag}_imu_string", f"IMU Data: {decoded}")
-            dpg.set_value(f"{self.tag}_accel_x", data[start_idx])
-            dpg.set_value(f"{self.tag}_accel_y", data[start_idx+1])
-            dpg.set_value(f"{self.tag}_accel_z", data[start_idx+2])
-            dpg.set_value(f"{self.tag}_gyr_x", data[start_idx+3])
-            dpg.set_value(f"{self.tag}_gyr_y", data[start_idx+4])
-            dpg.set_value(f"{self.tag}_gyr_z", data[start_idx+5])
 
 
 class BLEDeviceWidget:
@@ -75,7 +31,9 @@ class BLEDeviceWidget:
         self.on_click = None
         self.handler_registry = dpg.add_item_handler_registry()
         self.click_handler = -1
-        self.imu_data = IMUDataWidget(app, self)
+        self.imu_data = IMUDataWidget(app, self.device, self.connect_button_callback)
+        # self.imu_data2 = IMUDataWidget(app, self.device, self.connect_button_callback, "copy")
+        self.widget_added = False
         self.is_exerwatch = False
         self.is_selected = False
         if self.foldout_container is not None:
@@ -92,10 +50,6 @@ class BLEDeviceWidget:
             self.on_click(sender, app_data, self)
         except Exception as e:
             print(f"Exception on click: {e}")
-            
-    def imu_widget(self, container: str = None):
-        container = self.exer_sensors_container if container is None else container
-        self.imu_data.add_widget(container)
 
     def device_info(self, container: str = None):
         container = self.panel_container if container is None else container
@@ -104,7 +58,7 @@ class BLEDeviceWidget:
         except Exception as e:
             print(f"Exception deleting items: {e}")
         with dpg.group(parent=container, tag=self.panel_tag) as grp:
-            # self.imu_widget(grp)
+            # self.imu_data.add_widget(grp)
             dpg.add_text(tag=f"{self.panel_tag}_address", default_value=f"{self.device.address}")
             dpg.add_text(tag=f"{self.panel_tag}_name", default_value=f"{self.device.name}")
             dpg.add_text(tag=f"{self.panel_tag}_service_uuids", default_value=f"{self.data.service_uuids}")
@@ -130,8 +84,9 @@ class BLEDeviceWidget:
         asyncio.run_coroutine_threadsafe(self.connect(device), self.app.bg_loop)
 
     def notification_handler(self, characteristic: BleakGATTCharacteristic, data: bytearray):
-        dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address}) => {data.decode("utf-8")}")
+        dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address}) => {data.decode('utf-8')}")
         self.imu_data.update(data)
+        # self.imu_data2.update(data)
         # print(f"{characteristic.description}: {data}")
 
     async def disconnect(self):
@@ -175,13 +130,20 @@ class BLEDeviceWidget:
         # print(f"Updating theme for {self.device.name}: {self.theme} ")
         dpg.bind_item_theme(self.foldout_tag, self.theme)
         dpg.configure_item(self.button_tag, show=self.is_exerwatch)
+        
+    def add_widget(self, container: str = None):
+        container = self.exer_sensors_container if container is None else container
+        self.imu_data.add_widget(self.exer_sensors_container)
+        # self.imu_data2.add_widget(self.exer_sensors_container)
+        self.widget_added = True
 
     def update(self, data: AdvertisementData):
+        if data is None or self.is_exerwatch:
+            return
         self.data = data
-        if self.data is not None:
-            if not self.is_exerwatch:
-                self.is_exerwatch = any(map(lambda x: x.upper() == EXER_BLE_SERVICE_UUID, data.service_uuids))
-                if self.is_exerwatch:
-                    self.update_theme()
-                    for i in range(len(self.app.devices.keys())):
-                        dpg.move_item_up(self.foldout_tag)  # Move ExerWatch sensors all the way to the top
+        self.is_exerwatch = any(map(lambda x: x.upper() == EXER_BLE_SERVICE_UUID, data.service_uuids))
+        if self.is_exerwatch:
+            self.update_theme()
+            for i in range(len(self.app.devices.keys())):
+                dpg.move_item_up(self.foldout_tag)  # Move ExerWatch sensors all the way to the top
+            self.add_widget()
