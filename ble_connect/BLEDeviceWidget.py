@@ -12,9 +12,8 @@ import platform
 from .IMUDataWidget import IMUDataWidget
 from .config import EXER_BLE_SERVICE_UUID, CHARACTERISTIC_UUID_TX, CHARACTERISTIC_UUID_RX, TEST_SERVICE_UUIDS
 
-
 class BLEDeviceWidget:
-    def __init__(self, app, device: BLEDevice, data: AdvertisementData = None, foldout_container: str = None, panel_container: str = None, exer_sensors_container: str = None):
+    def __init__(self, app, device: BLEDevice, data: AdvertisementData = None, foldout_container: str = None, panel_container: str = None, exer_sensors_container: str = None, separate_window: bool = True):
         self.app = app
         self.themes = self.app.themes
         self.theme = self.themes.generic_device
@@ -32,11 +31,12 @@ class BLEDeviceWidget:
         self.handler_registry = dpg.add_item_handler_registry()
         self.click_handler = -1
         self.imu_data = IMUDataWidget(app, self, self.connect_button_callback)
-        # self.imu_data2 = IMUDataWidget(app, self.device, self.connect_button_callback, "copy")
+        # self.imu_data2 = IMUDataWidget(app, self, self.connect_button_callback, "copy")
         self.widget_added = False
         self.is_exerwatch = False
         self.is_selected = False
         self.is_connected = False
+        self.separate_window = separate_window
         if self.foldout_container is not None:
             self.foldout_info(self.foldout_container)
             
@@ -59,7 +59,6 @@ class BLEDeviceWidget:
         except Exception as e:
             print(f"Exception deleting items: {e}")
         with dpg.group(parent=container, tag=self.panel_tag) as grp:
-            # self.imu_data.add_widget(grp)
             dpg.add_text(tag=f"{self.panel_tag}_address", default_value=f"{self.device.address}")
             dpg.add_text(tag=f"{self.panel_tag}_name", default_value=f"{self.device.name}")
             dpg.add_text(tag=f"{self.panel_tag}_service_uuids", default_value=f"{self.data.service_uuids}")
@@ -135,7 +134,7 @@ class BLEDeviceWidget:
         
     def add_widget(self, container: str = None):
         container = self.exer_sensors_container if container is None else container
-        self.imu_data.add_widget(self.exer_sensors_container)
+        self.imu_data.add_widget(self.exer_sensors_container, separate_window=self.separate_window)
         # self.imu_data2.add_widget(self.exer_sensors_container)
         self.widget_added = True
 
