@@ -10,7 +10,8 @@ import asyncio
 import typing
 import platform
 from .IMUDataWidget import IMUDataWidget
-from .config import EXER_BLE_SERVICE_UUID, CHARACTERISTIC_UUID_TX, CHARACTERISTIC_UUID_RX, TEST_SERVICE_UUIDS
+from .config import EXER_BLE_SERVICE_UUID, EXER_CHARACTERISTIC_UUID_TX, EXER_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_TX, TEST_SERVICE_UUIDS
+
 
 class BLEDeviceWidget:
     def __init__(self, app, device: BLEDevice, data: AdvertisementData = None, foldout_container: str = None, panel_container: str = None, exer_sensors_container: str = None, separate_window: bool = True):
@@ -39,7 +40,7 @@ class BLEDeviceWidget:
         self.separate_window = separate_window
         if self.foldout_container is not None:
             self.foldout_info(self.foldout_container)
-            
+
     def set_selected(self, selected: bool):
         self.is_selected = selected
         self.update_theme()
@@ -61,7 +62,10 @@ class BLEDeviceWidget:
         with dpg.group(parent=container, tag=self.panel_tag) as grp:
             dpg.add_text(tag=f"{self.panel_tag}_address", default_value=f"{self.device.address}")
             dpg.add_text(tag=f"{self.panel_tag}_name", default_value=f"{self.device.name}")
-            dpg.add_text(tag=f"{self.panel_tag}_service_uuids", default_value=f"{self.data.service_uuids}")
+            try:
+                dpg.add_text(tag=f"{self.panel_tag}_service_uuids", default_value=f"{list(map(lambda x: str(x.uuid), self.client.services.services.values()))}")
+            except Exception as e:
+                pass
             dpg.add_text(tag=f"{self.panel_tag}_service_data", default_value=f"{self.data.service_data}")
             dpg.add_text(tag=f"{self.panel_tag}_manufacturer_data", default_value=f"{self.data.manufacturer_data}")
             dpg.add_text(tag=f"{self.panel_tag}_platform_data", default_value=f"{self.data.platform_data}")
@@ -90,7 +94,7 @@ class BLEDeviceWidget:
         # print(f"{characteristic.description}: {data}")
 
     async def disconnect(self):
-        await self.client.stop_notify(CHARACTERISTIC_UUID_TX)
+        await self.client.stop_notify(EXER_CHARACTERISTIC_UUID_TX)
         await self.client.disconnect()
         dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address})")
         dpg.configure_item(self.button_tag, label="Connect")
@@ -104,23 +108,26 @@ class BLEDeviceWidget:
         except Exception as e:
             print(f"Exception connecting to device: {device}: {e}")
             return
+
         # Start receiving notifications on the GATT characteristic advertising the sensor's IMU data
         try:
-            await self.client.start_notify(CHARACTERISTIC_UUID_TX, self.notification_handler)
+            await self.client.start_notify(EXER_CHARACTERISTIC_UUID_TX, self.notification_handler)
         except Exception as e:
-            print(f"Exception starting notificaitons for gatt '{CHARACTERISTIC_UUID_TX}': {e}")
+            print(f"Exception starting notificaitons for gatt '{EXER_CHARACTERISTIC_UUID_TX}': {e}")
 
         # Send the device name to the sensor
         try:
-            await self.client.write_gatt_char(CHARACTERISTIC_UUID_RX, bytearray(platform.node(), "utf-8"))
+            device_name = platform.node()
+            await self.client.write_gatt_char(WATCH_CHARACTERISTIC_UUID_RX, bytearray(f"n{device_name}", "utf-8"))
+            await self.client.write_gatt_char(EXER_CHARACTERISTIC_UUID_RX, bytearray(f"n{device_name}", "utf-8"))
             characteristics = self.client.services.characteristics
             str_data = list(map(lambda x: f"{x.uuid}: {x.description}", characteristics.values()))
             descriptors = self.client.services.descriptors
             str_data += list(map(lambda x: f"{x.uuid}: {x.description}", descriptors.values()))
             dpg.set_value(f"{self.panel_tag}_services", '\n - '.join(str_data))
         except Exception as e:
-            print(f"Exception writing to gatt '{CHARACTERISTIC_UUID_RX}': {e}")
-            
+            print(f"Exception writing to gatt '{EXER_CHARACTERISTIC_UUID_RX}': {e}")
+
     def update_theme(self):
         # dpg.configure_item(self.selectable_tag, selected=self.is_selected)
         self.theme = self.themes.generic_device
@@ -131,7 +138,7 @@ class BLEDeviceWidget:
         # print(f"Updating theme for {self.device.name}: {self.theme} ")
         dpg.bind_item_theme(self.foldout_tag, self.theme)
         dpg.configure_item(self.button_tag, show=self.is_exerwatch)
-        
+
     def add_widget(self, container: str = None):
         container = self.exer_sensors_container if container is None else container
         self.imu_data.add_widget(self.exer_sensors_container, separate_window=self.separate_window)
