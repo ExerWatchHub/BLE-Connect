@@ -42,6 +42,30 @@ class IMUDataPlot:
         self.show_data_table = False
         self.vlines = []
         
+    def reset(self):
+        self.data = IMUData()
+        dpg.configure_item(self.plot_x, x=[], y=[])
+        dpg.configure_item(self.plot_y, x=[], y=[])
+        dpg.configure_item(self.plot_z, x=[], y=[])
+        
+        try:
+            dpg.configure_item(self.vline, x=[])
+        except Exception as e:
+            pass
+        
+        try:
+            dpg.configure_item(self.hline, x=[])
+        except Exception as e:
+            pass
+        
+        if self.show_data_table:
+            try:
+                dpg.set_value(f"{self.tag}_table_x", "0.0")
+                dpg.set_value(f"{self.tag}_table_y", "0.0")
+                dpg.set_value(f"{self.tag}_table_z", "0.0")
+            except Exception as e:
+                pass
+        
     def data_table(self, **table_kwargs):
         with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=False, no_host_extendX=True, no_host_extendY=True, **table_kwargs):
             dpg.add_table_column(width=self.name_cell_width, width_fixed=True, width_stretch=False)
@@ -141,6 +165,7 @@ class IMUDataWidget:
         self.btn_tag = f"{self.tag}_button"
         self.output_tag = f"{self.tag}_output"
         self.export_btn_tag = f"{self.tag}_export_button"
+        self.clear_btn_tag = f"{self.tag}_clear_button"
         self.gyroscope: IMUDataPlot = IMUDataPlot(f"{self.tag}_gyro", "Gyroscope XYZ")
         self.accelerometer: IMUDataPlot = IMUDataPlot(f"{self.tag}_accelerometer", "Accelerometer XYZ")
         self.exercise_prototype: IMUDataPlot = IMUDataPlot(f"{self.tag}_ex_proto", "Exercise Prototype")
@@ -166,7 +191,10 @@ class IMUDataWidget:
             with dpg.group(horizontal=True):
                 dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=True, width=100, height=30)
                 dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
-                dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
+                dpg.add_button(tag=self.clear_btn_tag, label="Clear", callback=self.clear_data, enabled=True, show=True, width=100, height=30)
+                with dpg.group():
+                    dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
+                    dpg.add_text(tag=f"{self.tag}_exported_string", default_value="Last export: None", wrap=500)
             with dpg.child_window(height=400, width=-1, show=True) as wo:
                 dpg.bind_item_theme(wo, self.themes.exer_output_log)
                 with dpg.group(horizontal=True, width=-1, height=-1) as go:
@@ -196,11 +224,13 @@ class IMUDataWidget:
                 dpg.add_text(tag=f"{self.tag}_gyr_y", default_value=f"0.0")
                 dpg.add_text(tag=f"{self.tag}_gyr_z", default_value=f"0.0")
                 
-
     def update_imu_table(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z, imu_string):
+        try:
+            dpg.set_value(f"{self.tag}_imu_string", f"{imu_string}")
+        except Exception as e:
+            pass
         if not self.show_imu_table:
             return
-        dpg.set_value(f"{self.tag}_imu_string", f"{imu_string}")
         dpg.set_value(f"{self.tag}_accelerometer_x", f"{acc_x:.2f}")
         dpg.set_value(f"{self.tag}_accelerometer_y", f"{acc_y:.2f}")
         dpg.set_value(f"{self.tag}_accelerometer_z", f"{acc_z:.2f}")
@@ -208,9 +238,16 @@ class IMUDataWidget:
         dpg.set_value(f"{self.tag}_gyr_y", f"{gyr_y:.2f}")
         dpg.set_value(f"{self.tag}_gyr_z", f"{gyr_z:.2f}")
                 
+    def clear_data(self):
+        self.accelerometer.reset()
+        self.gyroscope.reset()
+        self.exercise_prototype.reset()
+        
     def export_data(self):
-        file_time = datetime.datetime.now().strftime("%d-%m_%I-%M")
-        file_name = f"{self.device.name}_{file_time}.csv"
+        if not os.path.exists("data"):
+            os.makedirs("data")
+        file_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
+        file_name = f"data/{self.device.name}_{file_time}.csv"
         print(f"Exporting imu data to: {file_name}")
         with open(file_name, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
@@ -220,6 +257,11 @@ class IMUDataWidget:
                 row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
                 row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
                 csv_writer.writerow(row)
+
+        try:
+            dpg.set_value(f"{self.tag}_exported_string", f"Last export: {file_name}")
+        except Exception as e:
+            pass
             
 
     def update(self, byte_data: bytearray, start_idx: int = 1):
@@ -256,6 +298,7 @@ class IMUDataWidget:
             self.run_exersense(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z)
         except Exception as e:
             print(f"Exception calling python module: {e}")
+            
             
     def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
         try:

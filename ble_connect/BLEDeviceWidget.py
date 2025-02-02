@@ -85,7 +85,10 @@ class BLEDeviceWidget:
     def connect_button_callback(self, sender, app_data, device):
         print(f"Sender: {sender}")
         print(f"App Data: {app_data}")
-        asyncio.run_coroutine_threadsafe(self.connect(device), self.app.bg_loop)
+        if self.is_connected:
+            asyncio.run_coroutine_threadsafe(self.disconnect(device), self.app.bg_loop)
+        else:
+            asyncio.run_coroutine_threadsafe(self.connect(device), self.app.bg_loop)
 
     def notification_handler(self, characteristic: BleakGATTCharacteristic, data: bytearray):
         dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address}) => {data.decode('utf-8')}")
@@ -93,11 +96,12 @@ class BLEDeviceWidget:
         # self.imu_data2.update(data)
         # print(f"{characteristic.description}: {data}")
 
-    async def disconnect(self):
+    async def disconnect(self, device):
         await self.client.stop_notify(EXER_CHARACTERISTIC_UUID_TX)
         await self.client.disconnect()
-        dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address})")
+        self.is_connected = False
         dpg.configure_item(self.button_tag, label="Connect")
+        dpg.set_item_label(self.selectable_tag, f"{self.device.name} ({self.device.address})")
 
     async def connect(self, device):
         try:
