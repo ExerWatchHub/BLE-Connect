@@ -60,7 +60,7 @@ class BLEConnect:
         self.devices[device.address].update(data)
 
     async def run(self):
-        dpg.create_viewport(title="ExerWatch BLE-Connect")
+        dpg.create_viewport(title="ExerWatch BLE-Connect", width=1800, height=1200)
         dpg.setup_dearpygui()
 
         self.themes = BLEConnectTheme()
@@ -95,7 +95,7 @@ class BLEConnect:
                     
             # self.exer_sensors_row = dpg.add_child_window(label="ExerWatch Sensors", no_close=False, no_collapse=False, autosize=True, pos=(0, 0))
             if not self.separate_sensors_windows:
-                self.exer_sensors_row = dpg.add_window(label="ExerWatch Sensors")
+                self.exer_sensors_row = dpg.add_window(label="ExerWatch Sensors", autosize=True)
                 
             with dpg.group(horizontal=True) as grp:
                 with dpg.child_window(tag=self.devices_list_id, height=600, width=600, resizable_x=True):
@@ -103,7 +103,7 @@ class BLEConnect:
                         dpg.add_loading_indicator(circle_count=5, tag=self.scan_loading, show=True, radius=2, color=(255, 255, 255, 255))
                         dpg.add_input_text(label="Name filter (inc, -exc)", user_data=self.filter_tag, callback=lambda sender, app_data, user_data: dpg.set_value(user_data, dpg.get_value(sender)))
                     dpg.add_filter_set(tag=self.filter_tag)
-                with dpg.child_window(tag=self.device_info_tag, auto_resize_y=True, width=500):
+                with dpg.child_window(tag=self.device_info_tag, auto_resize_y=True, auto_resize_x=True, resizable_x=True, resizable_y=True):
                     dpg.add_text("Click on a device to see details")
         if primary:
             dpg.set_primary_window(tag, True)
