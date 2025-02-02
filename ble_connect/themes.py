@@ -28,3 +28,13 @@ class BLEConnectTheme:
                 dpg.add_theme_color(dpg.mvThemeCol_Header, (101, 66, 52))
                 # dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (101, 66, 52))
                 # dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (101, 66, 52))
+
+        self.exer_output_log: str = "exer_output_log"
+        with dpg.theme(tag=self.exer_output_log):
+            with dpg.theme_component(dpg.mvAll):
+                dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 2)
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (17, 21, 38), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (17, 21, 38), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (17, 21, 38), category=dpg.mvThemeCat_Core)
+                dpg.add_theme_color(dpg.mvThemeCol_Header, (17, 21, 38), category=dpg.mvThemeCat_Core)
+        

@@ -117,6 +117,5 @@ class BLEConnect:
         dpg.configure_item("__demo_id", collapsed=collapsed)
             
     def toggle_editors(self):
-        # dpg.show_style_editor()
-        # dpg.show_font_manager()
-        pass
+        dpg.show_style_editor()
+        dpg.show_font_manager()

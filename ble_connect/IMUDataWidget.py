@@ -4,7 +4,6 @@ import csv
 import time
 import datetime
 
-
 class IMUData:
     def __init__(self):
         self.x: list[float] = []
@@ -15,7 +14,7 @@ class IMUData:
     def __len__(self):
         return len(self.x)
 
-    def append(self, x: float, y: float, z: float, t: float = None):
+    def append(self, x: float = 0, y: float = 0, z: float = 0, t: float = None):
         self.x.append(x)
         self.y.append(y)
         self.z.append(z)
@@ -30,33 +29,98 @@ class IMUDataPlot:
         self.tag = tag
         self.data: IMUData = IMUData()
         self.title = title
+        self.title_short = f"{self.title[0:3]}."
         self.plot_x = f"{self.tag}_plotX"
         self.plot_y = f"{self.tag}_plotY"
         self.plot_z = f"{self.tag}_plotZ"
         self.xaxis = f"{self.tag}_xaxis"
         self.yaxis = f"{self.tag}_yaxis"
+        self.vline = f"{self.tag}_vline"
+        self.hline = f"{self.tag}_hline"
         self.fit_checkbox = f"{self.tag}_fit_checkbox"
+        self.name_cell_width = 120
+        self.show_data_table = False
+        self.vlines = []
+        
+    def data_table(self, **table_kwargs):
+        with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=False, no_host_extendX=True, no_host_extendY=True, **table_kwargs):
+            dpg.add_table_column(width=self.name_cell_width, width_fixed=True, width_stretch=False)
+            dpg.add_table_column(width=self.name_cell_width, label=self.title_short, width_fixed=True, width_stretch=False)
 
-    def make_plot(self, width=-1, height=400):
-        with dpg.group() as grp:
+            with dpg.table_row(label="X", height=20):
+                dpg.add_text(default_value="X")
+                dpg.add_text(tag=f"{self.tag}_table_x", default_value=f"0.0")
+
+            with dpg.table_row(label="Y", height=20):
+                dpg.add_text(default_value="Y")
+                dpg.add_text(tag=f"{self.tag}_table_y", default_value=f"0.0")
+
+            with dpg.table_row(label="Z", height=20):
+                dpg.add_text(default_value="Z")
+                dpg.add_text(tag=f"{self.tag}_table_z", default_value=f"0.0")
+                
+    def make_plot(self, width=-1, height=400, show_data_table=True, **plot_kwargs):
+        self.show_data_table = show_data_table
+        with dpg.group(height=height, width=width) as grp:
             dpg.add_checkbox(label="Auto-fit x-axis limits", tag=self.fit_checkbox, default_value=True, show=False)
-            with dpg.plot(label=self.title, height=height, width=width, ):
-                dpg.add_plot_legend()
-                dpg.add_plot_axis(dpg.mvXAxis, tag=self.xaxis, time=False)
-                dpg.add_plot_axis(dpg.mvYAxis, tag=self.yaxis)
-                dpg.add_line_series([], [], tag=self.plot_x, parent=self.xaxis, label="X")
-                dpg.add_line_series([], [], tag=self.plot_y, parent=self.xaxis, label="Y")
-                dpg.add_line_series([], [], tag=self.plot_z, parent=self.xaxis, label="Z")
+            with dpg.group(horizontal=self.show_data_table, width=-1, height=-1):
+                if self.show_data_table:
+                    self.data_table()
+                with dpg.plot(label=self.title, **plot_kwargs):
+                    dpg.add_plot_legend()
+                    dpg.add_plot_axis(dpg.mvXAxis, tag=self.xaxis, time=False)
+                    dpg.add_plot_axis(dpg.mvYAxis, tag=self.yaxis)
+                    dpg.add_line_series([], [], tag=self.plot_x, parent=self.xaxis, label="X")
+                    dpg.add_line_series([], [], tag=self.plot_y, parent=self.xaxis, label="Y")
+                    dpg.add_line_series([], [], tag=self.plot_z, parent=self.xaxis, label="Z")
+                    try:
+                        dpg.add_inf_line_series(self.vlines, tag=self.vline, parent=self.xaxis, label="Exercises boundaries", color=(255, 255, 255))
+                    except Exception as e:
+                        pass
+                        # print(f"Exception adding vline: {e}.")
+                        # print(e)
 
-    def update(self, x: float, y: float, z: float, refresh_plot: bool = True):
+    def start_ex_region(self, before_padding=0):
+        # Add some "flat" data to separate exercise prototypes
+        for i in range(before_padding):
+            self.update(0, 0, 0)
+        print("STARRTING EXERCISE AT: ", len(self.data))
+        self.vlines.append(len(self.data))  # Start the region
+        self.update_ex_region()
+
+    def end_ex_region(self, after_padding=0):
+        print("ENDING EXERCISE AT: ", len(self.data))
+        self.vlines.append(len(self.data))  # End the region
+        # Add some "flat" data to separate exercise prototypes
+        for i in range(after_padding):
+            self.update(0, 0, 0)
+        self.update_ex_region()
+        
+    def update_ex_region(self):
+        try:
+            dpg.configure_item(self.vline, x=self.vlines)
+        except Exception as e:
+            # print(f"Exception updating vline: {e}.")
+            pass
+            
+    def update(self, x: float = 0, y: float = 0, z: float = 0, refresh_plot: bool = True):
         self.data.append(x, y, z)
         if refresh_plot:
             self.update_plot()
+            if self.show_data_table:
+                self.update_table()
 
+    def update_table(self):
+        if len(self.data) > 0:
+            dpg.set_value(f"{self.tag}_table_x", f"{self.data.x[-1]:.2f}")
+            dpg.set_value(f"{self.tag}_table_y", f"{self.data.y[-1]:.2f}")
+            dpg.set_value(f"{self.tag}_table_z", f"{self.data.z[-1]:.2f}")
+        
     def update_plot(self):
         dpg.configure_item(self.plot_x, x=self.data.t, y=self.data.x)
         dpg.configure_item(self.plot_y, x=self.data.t, y=self.data.y)
         dpg.configure_item(self.plot_z, x=self.data.t, y=self.data.z)
+        
         dpg.fit_axis_data(self.yaxis)
         if dpg.get_value(self.fit_checkbox):
             dpg.fit_axis_data(self.xaxis)
@@ -65,7 +129,7 @@ class IMUDataPlot:
 class IMUDataWidget:
     total_widgets = 0
 
-    def __init__(self, app, device_widget, connect_button_callback, extra_id: str = ""):
+    def __init__(self, app, device_widget, connect_button_callback, extra_id: str = "", show_imu_table: bool = False):
         self.app = app
         self.themes = self.app.themes
         self.device_widget = device_widget
@@ -75,9 +139,13 @@ class IMUDataWidget:
         self.float_cell_width = 50
         self.name_cell_width = 100
         self.btn_tag = f"{self.tag}_button"
+        self.output_tag = f"{self.tag}_output"
         self.export_btn_tag = f"{self.tag}_export_button"
         self.gyroscope: IMUDataPlot = IMUDataPlot(f"{self.tag}_gyro", "Gyroscope XYZ")
-        self.accelerometer: IMUDataPlot = IMUDataPlot(f"{self.tag}_accelerometer", "accelerometererometer XYZ")
+        self.accelerometer: IMUDataPlot = IMUDataPlot(f"{self.tag}_accelerometer", "Accelerometer XYZ")
+        self.exercise_prototype: IMUDataPlot = IMUDataPlot(f"{self.tag}_ex_proto", "Exercise Prototype")
+        self.show_imu_table = show_imu_table
+        self.exercise_counter = 0
 
     def add_widget(self, container: str = None, separate_window: bool = False):
         print(f"Adding IMU Widget to {container}")
@@ -89,37 +157,57 @@ class IMUDataWidget:
         with window:
             with dpg.group(horizontal=True):
                 dpg.add_text(tag=f"{self.tag}_title", default_value=f"{self.device.name}")
-                dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=True)
                 dpg.add_text(tag=f"{self.tag}_address", default_value=f"{self.device.address}", wrap=500)
                 dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
 
-            dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
+            if self.show_imu_table:
+                self.imu_table()
 
-            with dpg.table(header_row=True,
-                           borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=True,
-                           policy=dpg.mvTable_SizingStretchSame, no_host_extendX=True):
-                dpg.add_table_column(width=self.name_cell_width)
-                dpg.add_table_column(label="X")
-                dpg.add_table_column(label="Y")
-                dpg.add_table_column(label="Z")
+            with dpg.group(horizontal=True):
+                dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=True, width=100, height=30)
+                dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
+                dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
+            with dpg.child_window(height=400, width=-1, show=True) as wo:
+                dpg.bind_item_theme(wo, self.themes.exer_output_log)
+                with dpg.group(horizontal=True, width=-1, height=-1) as go:
+                    dpg.add_text(tag=self.output_tag, wrap=500, default_value="ExerSense Output:", show_label=False)
+                    self.exercise_prototype.make_plot(show_data_table=False)
 
-                with dpg.table_row():
-                    dpg.add_text("Accl")
-                    dpg.add_text(tag=f"{self.tag}_accelerometer_x", default_value=f"0.0")
-                    dpg.add_text(tag=f"{self.tag}_accelerometer_y", default_value=f"0.0")
-                    dpg.add_text(tag=f"{self.tag}_accelerometer_z", default_value=f"0.0")
-
-                with dpg.table_row():
-                    dpg.add_text("Gyro")
-                    dpg.add_text(tag=f"{self.tag}_gyr_x", default_value=f"0.0")
-                    dpg.add_text(tag=f"{self.tag}_gyr_y", default_value=f"0.0")
-                    dpg.add_text(tag=f"{self.tag}_gyr_z", default_value=f"0.0")
-
-            self.accelerometer.make_plot()
             self.gyroscope.make_plot()
+            self.accelerometer.make_plot()
 
-            dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True)
 
+    def imu_table(self):
+        with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=True, policy=dpg.mvTable_SizingStretchSame, no_host_extendX=True):
+            dpg.add_table_column(width=self.name_cell_width)
+            dpg.add_table_column(label="X")
+            dpg.add_table_column(label="Y")
+            dpg.add_table_column(label="Z")
+
+            with dpg.table_row():
+                dpg.add_text("Accl")
+                dpg.add_text(tag=f"{self.tag}_accelerometer_x", default_value=f"0.0")
+                dpg.add_text(tag=f"{self.tag}_accelerometer_y", default_value=f"0.0")
+                dpg.add_text(tag=f"{self.tag}_accelerometer_z", default_value=f"0.0")
+
+            with dpg.table_row():
+                dpg.add_text("Gyro")
+                dpg.add_text(tag=f"{self.tag}_gyr_x", default_value=f"0.0")
+                dpg.add_text(tag=f"{self.tag}_gyr_y", default_value=f"0.0")
+                dpg.add_text(tag=f"{self.tag}_gyr_z", default_value=f"0.0")
+                
+
+    def update_imu_table(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z, imu_string):
+        if not self.show_imu_table:
+            return
+        dpg.set_value(f"{self.tag}_imu_string", f"{imu_string}")
+        dpg.set_value(f"{self.tag}_accelerometer_x", f"{acc_x:.2f}")
+        dpg.set_value(f"{self.tag}_accelerometer_y", f"{acc_y:.2f}")
+        dpg.set_value(f"{self.tag}_accelerometer_z", f"{acc_z:.2f}")
+        dpg.set_value(f"{self.tag}_gyr_x", f"{gyr_x:.2f}")
+        dpg.set_value(f"{self.tag}_gyr_y", f"{gyr_y:.2f}")
+        dpg.set_value(f"{self.tag}_gyr_z", f"{gyr_z:.2f}")
+                
     def export_data(self):
         file_time = datetime.datetime.now().strftime("%d-%m_%I-%M")
         file_name = f"{self.device.name}_{file_time}.csv"
@@ -137,22 +225,91 @@ class IMUDataWidget:
     def update(self, byte_data: bytearray, start_idx: int = 1):
         if self.device_widget.is_connected:
             dpg.configure_item(self.btn_tag, label="Disconnect")
-        if byte_data is not None:
-            try:
-                decoded = byte_data.decode('utf-8')
-                data = [float(i) for i in decoded.split(",")]
-                dpg.set_value(f"{self.tag}_imu_string", f"IMU Data: {decoded}")
-                dpg.set_value(f"{self.tag}_accelerometer_x", data[start_idx])
-                dpg.set_value(f"{self.tag}_accelerometer_y", data[start_idx+1])
-                dpg.set_value(f"{self.tag}_accelerometer_z", data[start_idx+2])
-
-                dpg.set_value(f"{self.tag}_gyr_x", data[start_idx+3])
-                dpg.set_value(f"{self.tag}_gyr_y", data[start_idx+4])
-                dpg.set_value(f"{self.tag}_gyr_z", data[start_idx+5])
-            except Exception as e:
-                print(f"Exception decoding IMU data: {e}")
+        if byte_data is None:
+            print(f"IMU Data is None!")
+            return 
         try:
-            self.accelerometer.update(x=data[start_idx], y=data[start_idx+1], z=data[start_idx+2])
-            self.gyroscope.update(x=data[start_idx+3], y=data[start_idx+4], z=data[start_idx+5])
+            decoded = byte_data.decode('utf-8')
+            data = [float(i) for i in decoded.split(",")]
+            acc_x = data[start_idx]
+            acc_y = data[start_idx+1]
+            acc_z = data[start_idx+2]
+            gyr_x = data[start_idx+3]
+            gyr_y = data[start_idx+4]
+            gyr_z = data[start_idx+5]
         except Exception as e:
-            print(f"Exception updating IMU plots: {e}")
+            print(f"Exception decoding IMU data: {e}")
+            return
+
+        try:
+            self.update_imu_table(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z, decoded)
+        except Exception as e:
+            print(f"Exception updating IMU TABLES with data: {e}")
+        
+        try:
+            self.accelerometer.update(x=acc_x, y=acc_y, z=acc_z)
+            self.gyroscope.update(x=gyr_x, y=gyr_y, z=gyr_z)
+        except Exception as e:
+            print(f"Exception updating IMU PLOTS with data: {e}")
+
+        try:
+            self.run_exersense(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z)
+        except Exception as e:
+            print(f"Exception calling python module: {e}")
+            
+    def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
+        try:
+            import exersens_learner
+        except Exception as e:
+            print(f"Exception importing exersens_learner: {e}")
+            return
+        exer_out = exersens_learner.receive_data([(gyr_x, gyr_y, gyr_z)])
+        prefix = f"\n  -"
+        if exer_out is not None and len(exer_out) > 0:
+            out_type = exer_out[0].lower()
+            out_print = f"\n[Ex.{self.exercise_counter+1}] "
+            # Exercise region 'S'tart
+            if out_type == 's':
+                start_off_x = exer_out[1]
+                start_off_y = exer_out[2]
+                start_off_z = exer_out[3]
+                reps = exer_out[4]
+                reps_roms = ""
+                for rom in exer_out[5]:
+                    reps_roms = f"{prefix} ROM Completion: {rom[0]:.2f}, Max ROM XYZ: [{rom[1]:.2f}, {rom[2]:.2f}, {rom[3]:.2f}]"
+
+                self.exercise_prototype.start_ex_region()
+                self.accelerometer.start_ex_region()
+                self.gyroscope.start_ex_region()
+                
+                for proto_xyz in exer_out[6]:
+                    self.exercise_prototype.update(x=proto_xyz[0], y=proto_xyz[1], z=proto_xyz[2])
+                out_print += f"START -  Reps={reps}"
+                out_print += f"{prefix} Offsets XYZ: [{start_off_x}, {start_off_y}, {start_off_z}]"
+                out_print += reps_roms
+            elif out_type == 'u':
+                # Exercise 'U'pdate
+                reps = exer_out[1]
+                roms = [f"{x:.2f}" for x in exer_out[2]]
+                out_print += f"UPDATE - Reps={reps}, ROMs: {roms}"
+            elif out_type == 'e':
+                # Exercise region 'E'nd
+                end_off_x = exer_out[1]
+                end_off_y = exer_out[2]
+                end_off_z = exer_out[3]
+                out_print += f"END - Exercise XYZ: [{end_off_x}, {end_off_y}, {end_off_z}]\n"
+                self.exercise_prototype.end_ex_region(after_padding=5)
+                self.accelerometer.end_ex_region()
+                self.gyroscope.end_ex_region()
+                self.exercise_counter += 1
+            else:
+                out_print = "Unknown output type!"
+
+            dpg.set_value(self.output_tag, dpg.get_value(self.output_tag)+f"{out_print}")
+            try:
+                print(dpg.get_y_scroll(self.output_tag))
+            except Exception as e:
+                # print(f"Exception getting y scroll: {e}")
+                pass
+            dpg.set_y_scroll(self.output_tag, 0)
+            print(f"ExerSens Output: {exer_out}")
