@@ -10,6 +10,7 @@ class IMUData:
         self.y: list[float] = []
         self.z: list[float] = []
         self.t: list[float] = []
+        self.region_idx = []
 
     def __len__(self):
         return len(self.x)
@@ -41,6 +42,7 @@ class IMUDataPlot:
         self.name_cell_width = 120
         self.show_data_table = False
         self.vlines = []
+        self.region_idx = -1
         
     def reset(self):
         self.data = IMUData()
@@ -105,15 +107,16 @@ class IMUDataPlot:
                         # print(e)
 
     def start_ex_region(self, before_padding=0):
+        self.region_idx += 1
         # Add some "flat" data to separate exercise prototypes
         for i in range(before_padding):
             self.update(0, 0, 0)
-        print("STARRTING EXERCISE AT: ", len(self.data))
+        # print("STARTING EXERCISE AT: ", len(self.data))
         self.vlines.append(len(self.data))  # Start the region
         self.update_ex_region()
 
     def end_ex_region(self, after_padding=0):
-        print("ENDING EXERCISE AT: ", len(self.data))
+        # print("ENDING EXERCISE AT: ", len(self.data))
         self.vlines.append(len(self.data))  # End the region
         # Add some "flat" data to separate exercise prototypes
         for i in range(after_padding):
@@ -247,9 +250,9 @@ class IMUDataWidget:
         if not os.path.exists("data"):
             os.makedirs("data")
         file_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
-        file_name = f"data/{self.device.name}_{file_time}.csv"
-        print(f"Exporting imu data to: {file_name}")
-        with open(file_name, 'w', newline='') as csvfile:
+        imu_file_name = f"data/{self.device.name}_IMU_{file_time}.csv"
+        print(f"Exporting imu data to: {imu_file_name}")
+        with open(imu_file_name, 'w', newline='') as csvfile:
             csv_writer = csv.writer(csvfile)
             csv_writer.writerow(["time", "accel_x", "accel_y", "accel_z", "gyr_x", "gyr_y", "gyr_z"])
             for i in range(len(self.accelerometer.data)):
@@ -257,9 +260,20 @@ class IMUDataWidget:
                 row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
                 row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
                 csv_writer.writerow(row)
+                
+        proto_file_name = f"data/{self.device.name}_ExProto_{file_time}.csv"
+        print(f"Exporting exercises prototype data to: {proto_file_name}")
+        with open(proto_file_name, 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(["time", "x", "y", "z", "proto_id"])
+            for i in range(len(self.exercise_prototype.data)):
+                row = [self.accelerometer.data.t[i]]
+                row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
+                row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
+                csv_writer.writerow(row)
 
         try:
-            dpg.set_value(f"{self.tag}_exported_string", f"Last export: {file_name}")
+            dpg.set_value(f"{self.tag}_exported_string", f"Last export: {imu_file_name} and {proto_file_name}")
         except Exception as e:
             pass
             
