@@ -308,10 +308,7 @@ class IMUDataWidget:
         except Exception as e:
             print(f"Exception updating IMU PLOTS with data: {e}")
 
-        try:
-            self.run_exersense(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z)
-        except Exception as e:
-            print(f"Exception calling python module: {e}")
+        self.run_exersense(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z)
             
             
     def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
@@ -327,33 +324,45 @@ class IMUDataWidget:
             out_print = f"\n[Ex.{self.exercise_counter+1}] "
             # Exercise region 'S'tart
             if out_type == 's':
-                start_off_x = exer_out[1]
-                start_off_y = exer_out[2]
-                start_off_z = exer_out[3]
-                reps = exer_out[4]
+                start_off_x, start_off_y, start_off_z = exer_out[1] # it's a tuple
+                reps = exer_out[2]
                 reps_roms = ""
-                for rom in exer_out[5]:
-                    reps_roms = f"{prefix} ROM Completion: {rom[0]:.2f}, Max ROM XYZ: [{rom[1]:.2f}, {rom[2]:.2f}, {rom[3]:.2f}]"
+                for rom in exer_out[3]:
+                    reps_roms = f"{prefix} Rep accuracy: {rom[0]:.2f}, Max ROM XYZ: [{rom[1]:.2f}, {rom[2]:.2f}, {rom[3]:.2f}]"
 
+                dominant_axis_idx = exer_out[4]
                 self.exercise_prototype.start_ex_region()
                 self.accelerometer.start_ex_region()
                 self.gyroscope.start_ex_region()
                 
-                for proto_xyz in exer_out[6]:
-                    self.exercise_prototype.update(x=proto_xyz[0], y=proto_xyz[1], z=proto_xyz[2])
+                prototype_dom_axis = []
+                prototype_vector = exer_out[5]
+                for v in prototype_vector:
+                    prototype_dom_axis.append(float(v))
+                    # Only add the prototype value to the dominant axis
+                    self.exercise_prototype.update(
+                        x = v if dominant_axis_idx==0 else 0,
+                        y = v if dominant_axis_idx==1 else 0,
+                        z = v if dominant_axis_idx==2 else 0
+                    )
                 out_print += f"START -  Reps={reps}"
                 out_print += f"{prefix} Offsets XYZ: [{start_off_x}, {start_off_y}, {start_off_z}]"
                 out_print += reps_roms
+                out_print += f"{prefix} Dominant axis: {dominant_axis_idx} - Prototype XYZ: {prototype_dom_axis}"
             elif out_type == 'u':
                 # Exercise 'U'pdate
                 reps = exer_out[1]
-                roms = [f"{x:.2f}" for x in exer_out[2]]
+                roms = ""
+                for axis_rom_data in exer_out[2]:
+                    rep_correctness = axis_rom_data[0]
+                    rom_x = axis_rom_data[1]
+                    rom_y = axis_rom_data[2]
+                    rom_z = axis_rom_data[3]
+                    roms += f"({rep_correctness:.2f}, {rom_x:.2f}, {rom_y:.2f}, {rom_z:.2f}) "
                 out_print += f"UPDATE - Reps={reps}, ROMs: {roms}"
             elif out_type == 'e':
                 # Exercise region 'E'nd
-                end_off_x = exer_out[1]
-                end_off_y = exer_out[2]
-                end_off_z = exer_out[3]
+                end_off_x, end_off_y, end_off_z = exer_out[1]
                 out_print += f"END - Exercise XYZ: [{end_off_x}, {end_off_y}, {end_off_z}]\n"
                 self.exercise_prototype.end_ex_region(after_padding=5)
                 self.accelerometer.end_ex_region()
@@ -366,7 +375,5 @@ class IMUDataWidget:
             try:
                 print(dpg.get_y_scroll(self.output_tag))
             except Exception as e:
-                # print(f"Exception getting y scroll: {e}")
-                pass
-            dpg.set_y_scroll(self.output_tag, 0)
+                print(f"Exception getting y scroll: {e}")
             print(f"ExerSens Output: {exer_out}")
