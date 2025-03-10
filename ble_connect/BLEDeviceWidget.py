@@ -10,7 +10,7 @@ import asyncio
 import typing
 import platform
 from .IMUDataWidget import IMUDataWidget
-from .config import EXER_BLE_SERVICE_UUID, EXER_CHARACTERISTIC_UUID_TX, EXER_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_TX, TEST_SERVICE_UUIDS
+from .config import EXER_BLE_SERVICE_UUID, EXER_CHARACTERISTIC_UUID_TX, EXER_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_TX, TEST_SERVICE_UUIDS, FILTERED_DEVICE_NAMES, FILTERED_DEVICE_UUIDS
 
 
 class BLEDeviceWidget:
@@ -35,6 +35,7 @@ class BLEDeviceWidget:
         # self.imu_data2 = IMUDataWidget(app, self, self.connect_button_callback, "copy")
         self.widget_added = False
         self.is_exerwatch = False
+        self.is_accepted_device = False
         self.is_selected = False
         self.is_connected = False
         self.separate_window = separate_window
@@ -82,7 +83,9 @@ class BLEDeviceWidget:
         self.click_handler = dpg.add_item_clicked_handler(parent=self.handler_registry, callback=self.on_device_click)
         dpg.bind_item_theme(self.foldout_tag, self.themes.generic_device)
 
-    def connect_button_callback(self, sender, app_data, device):
+    def connect_button_callback(self, sender="Internal", app_data=None, device=None):
+        if device is None:
+            device = self.device
         print(f"Sender: {sender}")
         print(f"App Data: {app_data}")
         if self.is_connected:
@@ -105,7 +108,7 @@ class BLEDeviceWidget:
 
     async def connect(self, device):
         try:
-            print(f"Connecting to {device.address}")
+            print(f"Connecting to {device.name} {device.address}")
             await self.client.connect()
             self.is_connected = True
             dpg.configure_item(self.button_tag, label="Disconnect")
@@ -154,7 +157,14 @@ class BLEDeviceWidget:
             return
         self.data = data
         self.is_exerwatch = any(map(lambda x: x.upper() in [EXER_BLE_SERVICE_UUID]+TEST_SERVICE_UUIDS, data.service_uuids))
+        self.is_accepted_device = (self.device.name in FILTERED_DEVICE_NAMES or self.device.address in FILTERED_DEVICE_UUIDS)
         if self.is_exerwatch:
+            if not self.is_accepted_device:
+                print(f"New device {self.device.name} is NOT in the list of accepted devices!: {FILTERED_DEVICE_NAMES}")
+                return
+            else:
+                if not self.is_connected:
+                    asyncio.run_coroutine_threadsafe(self.connect(self.device), self.app.bg_loop)
             self.update_theme()
             for i in range(len(self.app.devices.keys())):
                 dpg.move_item_up(self.foldout_tag)  # Move ExerWatch sensors all the way to the top

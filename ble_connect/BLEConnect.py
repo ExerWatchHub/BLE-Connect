@@ -8,6 +8,7 @@ import logging
 import argparse
 from threading import Thread
 import asyncio
+from .config import FILTERED_DEVICE_NAMES, FILTERED_DEVICE_UUIDS
 
 
 class BLEConnect:
@@ -53,14 +54,14 @@ class BLEConnect:
         if not dpg.is_dearpygui_running():
             return
         if device.address not in self.devices:
-            # print(f"Device detected: {device}")
+            # print(f"New Device detected: {device}")
             device_ui = BLEDeviceWidget(self, device, data, self.filter_tag, self.device_info_tag, self.exer_sensors_row, self.separate_sensors_windows)
             device_ui.on_click = self.on_device_click
             self.devices[device.address] = device_ui
         self.devices[device.address].update(data)
 
     async def run(self):
-        dpg.create_viewport(title="ExerWatch BLE-Connect", width=1800, height=1200)
+        dpg.create_viewport(title="ExerWatch BLE-Connect", width=1000, height=800)
         dpg.setup_dearpygui()
 
         self.themes = BLEConnectTheme()

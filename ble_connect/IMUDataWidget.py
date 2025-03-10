@@ -3,6 +3,8 @@ import os
 import csv
 import time
 import datetime
+from icecream import ic
+
 
 class IMUData:
     def __init__(self):
@@ -38,7 +40,8 @@ class IMUDataPlot:
         self.yaxis = f"{self.tag}_yaxis"
         self.vline = f"{self.tag}_vline"
         self.hline = f"{self.tag}_hline"
-        self.fit_checkbox = f"{self.tag}_fit_checkbox"
+        self.fit_checkbox_x = f"{self.tag}_fit_checkbox_x"
+        self.fit_checkbox_y = f"{self.tag}_fit_checkbox_y"
         self.name_cell_width = 120
         self.show_data_table = False
         self.vlines = []
@@ -85,20 +88,53 @@ class IMUDataPlot:
                 dpg.add_text(default_value="Z")
                 dpg.add_text(tag=f"{self.tag}_table_z", default_value=f"0.0")
                 
-    def make_plot(self, width=-1, height=400, show_data_table=True, **plot_kwargs):
+    def make_plot(self, width=-1, height=400, show_data_table=True, area_selection_enabled=True, **plot_kwargs):
         self.show_data_table = show_data_table
+        ui_drag_enabled = True
+
+        def mouse_plot_drag_handler(*args, **kwargs):
+            print(f"Drag rect handler: {args}, {kwargs}")
+            # print(f"Plot drag handler: {s}_{self.tag}, {a}")
+        
+        def query_handler(sender, app_data, user_data):
+            print(f"Query handler: {sender}, {app_data}, {user_data}")
+            
+        def drag_rect_handler(*args, **kwargs):
+            print(f"Drag rect handler: {args}, {kwargs}")
+            # print(f"Plot drag handler: {s}_{self.tag}, {a}")
+            
         with dpg.group(height=height, width=width) as grp:
-            dpg.add_checkbox(label="Auto-fit x-axis limits", tag=self.fit_checkbox, default_value=True, show=False)
+            with dpg.group(horizontal=True, width=-1, height=-1, show=True):
+                dpg.add_text("Auto-fit axes:")
+                dpg.add_checkbox(label="X", tag=self.fit_checkbox_x, default_value=True)
+                dpg.add_checkbox(label="Y", tag=self.fit_checkbox_y, default_value=True)
             with dpg.group(horizontal=self.show_data_table, width=-1, height=-1):
                 if self.show_data_table:
                     self.data_table()
-                with dpg.plot(label=self.title, **plot_kwargs):
+                with dpg.plot(label=self.title, drag_callback=drag_rect_handler, query=True, vertical_mod=False, query_toggle_mod=dpg.mvKey_ModCtrl, box_select_mod=dpg.mvKey_ModDisabled, callback=query_handler, **plot_kwargs) as p:
                     dpg.add_plot_legend()
                     dpg.add_plot_axis(dpg.mvXAxis, tag=self.xaxis, time=False)
                     dpg.add_plot_axis(dpg.mvYAxis, tag=self.yaxis)
                     dpg.add_line_series([], [], tag=self.plot_x, parent=self.xaxis, label="X")
                     dpg.add_line_series([], [], tag=self.plot_y, parent=self.xaxis, label="Y")
                     dpg.add_line_series([], [], tag=self.plot_z, parent=self.xaxis, label="Z")
+                    if area_selection_enabled:
+                        drag_rect = dpg.add_drag_rect(default_value=(0, 0, 0, 0), show=False, callback=lambda *args, **kwargs: drag_rect_handler(*args, **kwargs))
+                        if ui_drag_enabled:
+                            def mouse_drag_handler(sender=None, a=None):
+                                print(f"Mouse drag handler: {sender}_{self.tag}, {a}")
+                                q_rects = dpg.get_plot_query_rects(p)
+                                print(f"QUery rects: {q_rects}")
+                            def mouse_down_handler(sender=None, a=None):
+                                print(f"Mouse down handler: {sender}_{self.tag}, {a}")
+                            def mouse_up_handler(sender=None, a=None):
+                                print(f"Mouse up handler: {sender}_{self.tag}, {a}")
+                            with dpg.handler_registry():
+                                try:
+                                    dpg.add_mouse_drag_handler(callback=mouse_drag_handler)
+                                    # dpg.add_mouse_release_handler(callback=mouse_drag_handler)
+                                except Exception as e:
+                                    pass
                     try:
                         dpg.add_inf_line_series(self.vlines, tag=self.vline, parent=self.xaxis, label="Exercises boundaries", color=(255, 255, 255))
                     except Exception as e:
@@ -148,8 +184,9 @@ class IMUDataPlot:
         dpg.configure_item(self.plot_y, x=self.data.t, y=self.data.y)
         dpg.configure_item(self.plot_z, x=self.data.t, y=self.data.z)
         
-        dpg.fit_axis_data(self.yaxis)
-        if dpg.get_value(self.fit_checkbox):
+        if dpg.get_value(self.fit_checkbox_y):
+            dpg.fit_axis_data(self.yaxis)
+        if dpg.get_value(self.fit_checkbox_x):
             dpg.fit_axis_data(self.xaxis)
 
 
@@ -202,7 +239,7 @@ class IMUDataWidget:
                 dpg.bind_item_theme(wo, self.themes.exer_output_log)
                 with dpg.group(horizontal=True, width=-1, height=-1) as go:
                     dpg.add_text(tag=self.output_tag, wrap=500, default_value="ExerSense Output:", show_label=False)
-                    self.exercise_prototype.make_plot(show_data_table=False)
+                    self.exercise_prototype.make_plot(show_data_table=False, area_selection_enabled=False)
 
             self.gyroscope.make_plot()
             self.accelerometer.make_plot()
@@ -372,8 +409,8 @@ class IMUDataWidget:
                 out_print = "Unknown output type!"
 
             dpg.set_value(self.output_tag, dpg.get_value(self.output_tag)+f"{out_print}")
-            try:
-                print(dpg.get_y_scroll(self.output_tag))
-            except Exception as e:
-                print(f"Exception getting y scroll: {e}")
+            # try:
+            #     print(dpg.get_y_scroll(self.output_tag))
+            # except Exception as e:
+            #     print(f"Exception getting y scroll: {e}")
             print(f"ExerSens Output: {exer_out}")
