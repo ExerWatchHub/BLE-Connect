@@ -351,7 +351,7 @@ class IMUDataWidget:
             print(f"Exception importing exersens_learner: {e}")
             return
         # highlighted_region = dpg.get_value(self.drag_rect_tag)
-        exer_out = exersens_learner.receive_data([(gyr_x, gyr_y, gyr_z)])
+        exer_out = exersens_learner.receive_data([(gyr_x, gyr_y, gyr_z)], [(acc_x, acc_y, acc_z)], [.1])
         prefix = f"\n  -"
         if exer_out is not None and len(exer_out) > 0:
             out_type = exer_out[0].lower()
