@@ -107,6 +107,7 @@ class IMUDataPlot:
                 print(f"Query handler: {sender}, {query_rects}, {user_data}")
                 self.parent.gyroscope.update_query_rect(query_rects[0])
                 self.parent.accelerometer.update_query_rect(query_rects[0])
+                self.parent.detect_prototype()
             
         def drag_rect_handler(*args, **kwargs):
             if self.area_selection_enabled:
@@ -340,18 +341,35 @@ class IMUDataWidget:
             self.gyroscope.update(x=gyr_x, y=gyr_y, z=gyr_z)
         except Exception as e:
             print(f"Exception updating IMU PLOTS with data: {e}")
-
         self.run_exersense(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z)
-            
-            
-    def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
+        
+    def detect_prototype(self):
         try:
-            import exersens_learner
+            import exersens_learner as learner
         except Exception as e:
             print(f"Exception importing exersens_learner: {e}")
             return
-        # highlighted_region = dpg.get_value(self.drag_rect_tag)
-        exer_out = exersens_learner.receive_data([(gyr_x, gyr_y, gyr_z)], [(acc_x, acc_y, acc_z)], [.1])
+        gyr_region = dpg.get_value(self.gyroscope.drag_rect_tag)
+        acc_region = dpg.get_value(self.accelerometer.drag_rect_tag)
+        print(f"Detecting prototype from region. Gyr: [{gyr_region[0]}, {gyr_region[2]}], Acc: [{acc_region[0]}, {acc_region[2]}]")
+        try:
+            exer_prototype_out = learner.detect_prototype(gyr_region[0], gyr_region[2])
+            print(f"ExerSense Prototype Output: {exer_prototype_out}")
+        except Exception as e:
+            print(f"Exception running exersense: {e}")
+            return
+            
+    def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
+        try:
+            import exersens_learner as learner
+        except Exception as e:
+            print(f"Exception importing exersens_learner: {e}")
+            return
+        try:
+            exer_out = learner.receive_data([(gyr_x, gyr_y, gyr_z)], [(acc_x, acc_y, acc_z)], [.1])
+        except Exception as e:
+            print(f"Exception running exersense: {e}")
+            return
         prefix = f"\n  -"
         if exer_out is not None and len(exer_out) > 0:
             out_type = exer_out[0].lower()
