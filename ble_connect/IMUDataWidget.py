@@ -28,11 +28,14 @@ class IMUData:
 
 
 class IMUDataPlot:
-    def __init__(self, tag: str = "imu_plot", title="Time Series"):
+    def __init__(self, parent, tag: str = "imu_plot", title="Time Series", area_selection_enabled=True):
         self.tag = tag
+        self.parent = parent
         self.data: IMUData = IMUData()
+        self.area_selection_enabled = area_selection_enabled
         self.title = title
         self.title_short = f"{self.title[0:3]}."
+        self.drag_rect_tag = f"{self.tag}_drag_rect"
         self.plot_x = f"{self.tag}_plotX"
         self.plot_y = f"{self.tag}_plotY"
         self.plot_z = f"{self.tag}_plotZ"
@@ -88,20 +91,27 @@ class IMUDataPlot:
                 dpg.add_text(default_value="Z")
                 dpg.add_text(tag=f"{self.tag}_table_z", default_value=f"0.0")
                 
-    def make_plot(self, width=-1, height=400, show_data_table=True, area_selection_enabled=True, **plot_kwargs):
+    def update_query_rect(self, query_rect=None):
+        ymin, ymax = dpg.get_axis_limits(self.yaxis)
+        if query_rect is None:
+            query_rect = dpg.get_value(self.drag_rect_tag)
+        xmin = query_rect[0]
+        xmax = query_rect[2]
+        dpg.set_value(self.drag_rect_tag, (xmin, ymin, xmax, ymax))
+                
+    def make_plot(self, width=-1, height=400, show_data_table=True, **plot_kwargs):
         self.show_data_table = show_data_table
-        ui_drag_enabled = True
-
-        def mouse_plot_drag_handler(*args, **kwargs):
-            print(f"Drag rect handler: {args}, {kwargs}")
-            # print(f"Plot drag handler: {s}_{self.tag}, {a}")
         
-        def query_handler(sender, app_data, user_data):
-            print(f"Query handler: {sender}, {app_data}, {user_data}")
+        def query_handler(sender, query_rects, user_data):
+            if self.area_selection_enabled:
+                print(f"Query handler: {sender}, {query_rects}, {user_data}")
+                self.parent.gyroscope.update_query_rect(query_rects[0])
+                self.parent.accelerometer.update_query_rect(query_rects[0])
             
         def drag_rect_handler(*args, **kwargs):
-            print(f"Drag rect handler: {args}, {kwargs}")
-            # print(f"Plot drag handler: {s}_{self.tag}, {a}")
+            if self.area_selection_enabled:
+                print(f"Drag rect handler: {args}, {kwargs}")
+                # print(f"Plot drag handler: {s}_{self.tag}, {a}")
             
         with dpg.group(height=height, width=width) as grp:
             with dpg.group(horizontal=True, width=-1, height=-1, show=True):
@@ -111,30 +121,15 @@ class IMUDataPlot:
             with dpg.group(horizontal=self.show_data_table, width=-1, height=-1):
                 if self.show_data_table:
                     self.data_table()
-                with dpg.plot(label=self.title, drag_callback=drag_rect_handler, query=True, vertical_mod=False, query_toggle_mod=dpg.mvKey_ModCtrl, box_select_mod=dpg.mvKey_ModDisabled, callback=query_handler, **plot_kwargs) as p:
+                with dpg.plot(label=self.title, query=True, vertical_mod=False, query_toggle_mod=False, box_select_mod=False, callback=query_handler, **plot_kwargs) as p:
+                    if self.area_selection_enabled:
+                        dpg.add_drag_rect(tag=self.drag_rect_tag, default_value=(0, 0, 0, 0), show=True, callback=lambda *args, **kwargs: drag_rect_handler(*args, **kwargs))
                     dpg.add_plot_legend()
                     dpg.add_plot_axis(dpg.mvXAxis, tag=self.xaxis, time=False)
                     dpg.add_plot_axis(dpg.mvYAxis, tag=self.yaxis)
                     dpg.add_line_series([], [], tag=self.plot_x, parent=self.xaxis, label="X")
                     dpg.add_line_series([], [], tag=self.plot_y, parent=self.xaxis, label="Y")
                     dpg.add_line_series([], [], tag=self.plot_z, parent=self.xaxis, label="Z")
-                    if area_selection_enabled:
-                        drag_rect = dpg.add_drag_rect(default_value=(0, 0, 0, 0), show=False, callback=lambda *args, **kwargs: drag_rect_handler(*args, **kwargs))
-                        if ui_drag_enabled:
-                            def mouse_drag_handler(sender=None, a=None):
-                                print(f"Mouse drag handler: {sender}_{self.tag}, {a}")
-                                q_rects = dpg.get_plot_query_rects(p)
-                                print(f"QUery rects: {q_rects}")
-                            def mouse_down_handler(sender=None, a=None):
-                                print(f"Mouse down handler: {sender}_{self.tag}, {a}")
-                            def mouse_up_handler(sender=None, a=None):
-                                print(f"Mouse up handler: {sender}_{self.tag}, {a}")
-                            with dpg.handler_registry():
-                                try:
-                                    dpg.add_mouse_drag_handler(callback=mouse_drag_handler)
-                                    # dpg.add_mouse_release_handler(callback=mouse_drag_handler)
-                                except Exception as e:
-                                    pass
                     try:
                         dpg.add_inf_line_series(self.vlines, tag=self.vline, parent=self.xaxis, label="Exercises boundaries", color=(255, 255, 255))
                     except Exception as e:
@@ -186,6 +181,7 @@ class IMUDataPlot:
         
         if dpg.get_value(self.fit_checkbox_y):
             dpg.fit_axis_data(self.yaxis)
+            self.update_query_rect()
         if dpg.get_value(self.fit_checkbox_x):
             dpg.fit_axis_data(self.xaxis)
 
@@ -206,9 +202,9 @@ class IMUDataWidget:
         self.output_tag = f"{self.tag}_output"
         self.export_btn_tag = f"{self.tag}_export_button"
         self.clear_btn_tag = f"{self.tag}_clear_button"
-        self.gyroscope: IMUDataPlot = IMUDataPlot(f"{self.tag}_gyro", "Gyroscope XYZ")
-        self.accelerometer: IMUDataPlot = IMUDataPlot(f"{self.tag}_accelerometer", "Accelerometer XYZ")
-        self.exercise_prototype: IMUDataPlot = IMUDataPlot(f"{self.tag}_ex_proto", "Exercise Prototype")
+        self.gyroscope: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_gyro", "Gyroscope XYZ")
+        self.accelerometer: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_accelerometer", "Accelerometer XYZ")
+        self.exercise_prototype: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_ex_proto", "Exercise Prototype", area_selection_enabled=False)
         self.show_imu_table = show_imu_table
         self.exercise_counter = 0
 
@@ -239,7 +235,7 @@ class IMUDataWidget:
                 dpg.bind_item_theme(wo, self.themes.exer_output_log)
                 with dpg.group(horizontal=True, width=-1, height=-1) as go:
                     dpg.add_text(tag=self.output_tag, wrap=500, default_value="ExerSense Output:", show_label=False)
-                    self.exercise_prototype.make_plot(show_data_table=False, area_selection_enabled=False)
+                    self.exercise_prototype.make_plot(show_data_table=False)
 
             self.gyroscope.make_plot()
             self.accelerometer.make_plot()
@@ -354,6 +350,7 @@ class IMUDataWidget:
         except Exception as e:
             print(f"Exception importing exersens_learner: {e}")
             return
+        # highlighted_region = dpg.get_value(self.drag_rect_tag)
         exer_out = exersens_learner.receive_data([(gyr_x, gyr_y, gyr_z)])
         prefix = f"\n  -"
         if exer_out is not None and len(exer_out) > 0:
