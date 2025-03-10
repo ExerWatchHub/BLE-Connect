@@ -8,7 +8,6 @@ import logging
 import argparse
 from threading import Thread
 import asyncio
-from .config import FILTERED_DEVICE_NAMES, FILTERED_DEVICE_UUIDS
 
 
 class BLEConnect:
