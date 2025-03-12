@@ -1,0 +1,20 @@
+[project]
+name = "exer-ble-gui"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "argparse>=1.4.0",
+    "bleak>=0.22.3",
+    "dearpygui>=2.0.0",
+    "dearpygui-ext>=2.0.0",
+    "holoviews>=1.20.1",
+    "icecream>=2.1.4",
+    "llvmlite==0.44.0",
+    "marimo>=0.11.17",
+    "numpy>=2.2.3",
+    "oyaml>=1.0",
+    "pandas>=2.2.3",
+    "scipy>=1.15.2",
+]
