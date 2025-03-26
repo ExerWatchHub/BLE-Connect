@@ -11,17 +11,24 @@ from .GraphRegion import *
 from .IMUDataPlot import *
 from .config import FREQUENCY
 
+class LocalFileMockDevice:
+    def __init__(self, address: str = "LOCAL_ADDRESS", name: str="MOCK_DEVICE"):
+        self.address = address
+        self.name = name
+        self.is_connected = True
+        
+def is_mock_device(device):
+    return isinstance(device, LocalFileMockDevice)
 
 class IMUDataWidget:
     total_widgets = 0
 
-    def __init__(self, app, device_widget, connect_button_callback, extra_id: str = "", show_imu_table: bool = False):
+    def __init__(self, app, device=None, connect_callback=None, extra_id: str = "", show_imu_table: bool = False):
         self.app = app
         self.themes = self.app.themes
-        self.device_widget = device_widget
-        self.device = device_widget.device
-        self.connect_button_callback = connect_button_callback
-        self.tag = f"{self.device.address}{extra_id}_imu_widget"
+        self.device = device if device is not None else LocalFileMockDevice()
+        self.connect_callback = connect_callback
+        self.tag = f"{self.device.address}_imu_widget{extra_id}"
         self.float_cell_width = 50
         self.name_cell_width = 100
         self.btn_tag = f"{self.tag}_button"
@@ -33,7 +40,33 @@ class IMUDataWidget:
         self.exercise_prototype: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_ex_proto", "Exercise Prototype", area_selection_enabled=False)
         self.show_imu_table = show_imu_table
         self.exercise_counter = 0
+        
+    def on_connect_clicked(self, sender, app_data):
+        if self.connect_callback is not None:
+            self.connect_callback(sender, app_data)
+        
+    def device_info(self):
+        with dpg.group(horizontal=True):
+            dpg.add_text(tag=f"{self.tag}_title", default_value=f"{self.device.name}")
+            dpg.add_text(tag=f"{self.tag}_address", default_value=f"{self.device.address}", wrap=500)
+            dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
 
+        # Cannot connect or export data from a mock device!
+        if is_mock_device(self.device):
+            return
+        
+        if self.show_imu_table:
+            self.imu_table()
+
+        with dpg.group(horizontal=True):
+            dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.on_connect_clicked, user_data=self.device, enabled=True, show=True, width=100, height=30)
+            dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
+            dpg.add_button(tag=self.clear_btn_tag, label="Clear", callback=self.clear_data, enabled=True, show=True, width=100, height=30)
+            with dpg.group():
+                dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
+                dpg.add_text(tag=f"{self.tag}_exported_string", default_value="Last export: None", wrap=500)
+                
+                
     def add_widget(self, container: str = None, separate_window: bool = False):
         print(f"Adding IMU Widget to {container}")
         if separate_window:
@@ -42,21 +75,7 @@ class IMUDataWidget:
         else:
             window = dpg.child_window(tag=self.tag, auto_resize_y=True, autosize_y=True, parent=container)
         with window:
-            with dpg.group(horizontal=True):
-                dpg.add_text(tag=f"{self.tag}_title", default_value=f"{self.device.name}")
-                dpg.add_text(tag=f"{self.tag}_address", default_value=f"{self.device.address}", wrap=500)
-                dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
-
-            if self.show_imu_table:
-                self.imu_table()
-
-            with dpg.group(horizontal=True):
-                dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=True, width=100, height=30)
-                dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
-                dpg.add_button(tag=self.clear_btn_tag, label="Clear", callback=self.clear_data, enabled=True, show=True, width=100, height=30)
-                with dpg.group():
-                    dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
-                    dpg.add_text(tag=f"{self.tag}_exported_string", default_value="Last export: None", wrap=500)
+            self.device_info()
             with dpg.child_window(height=400, width=-1, show=True) as wo:
                 dpg.bind_item_theme(wo, self.themes.exer_output_log)
                 with dpg.group(horizontal=True, width=-1, height=-1) as go:
@@ -116,6 +135,11 @@ class IMUDataWidget:
         # except Exception as e:
         #     raise e
         #     print(f"Exception updating region cuts: {e}")
+        
+        
+    def import_data(self, file_path_name):
+        print(f"Importing data from: {file_path_name}")
+        
         
     def export_data(self, out_dir="data"):
         export_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
@@ -178,7 +202,7 @@ class IMUDataWidget:
             
 
     def update(self, byte_data: bytearray, start_idx: int = 1):
-        if self.device_widget.is_connected:
+        if self.device.is_connected:
             dpg.configure_item(self.btn_tag, label="Disconnect")
         if byte_data is None:
             print(f"IMU Data is None!")

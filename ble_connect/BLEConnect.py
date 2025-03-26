@@ -1,4 +1,5 @@
 from .BLEDeviceWidget import BLEDeviceWidget
+from .DataViewer import DataViewerWindow
 from .themes import BLEConnectTheme
 from bleak import BleakClient, BleakScanner, BLEDevice, AdvertisementData
 import dearpygui.dearpygui as dpg
@@ -27,6 +28,7 @@ class BLEConnect:
         self.stop_event = asyncio.Event()
         self.themes = None
         self.separate_sensors_windows = True
+        self.graph_viewer : DataViewerWindow = None
 
     def setup_bg_loop(self):
         self.bg_loop = asyncio.new_event_loop()
@@ -64,7 +66,8 @@ class BLEConnect:
         dpg.setup_dearpygui()
 
         self.themes = BLEConnectTheme()
-        self.make_window("main_window", False)
+        self.make_devices_window("main_window", False)
+        self.graph_viewer = DataViewerWindow(self).show()
         # dpg.show_debug()
         # dpg.show_item_registry()
         # self.run_scan(None)
@@ -80,9 +83,9 @@ class BLEConnect:
         dpg.destroy_context()
 
         self.bg_loop.call_soon_threadsafe(self.bg_loop.stop)
-
-
-    def make_window(self, tag, primary=True):
+        
+    
+    def make_devices_window(self, tag, primary=True):
         with dpg.window(label="Devices", tag=tag, menubar=self.menubar, autosize=True):
             dpg.bind_font(self.themes.body_font)
             if self.menubar:
