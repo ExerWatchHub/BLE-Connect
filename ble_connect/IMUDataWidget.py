@@ -3,10 +3,13 @@ import os
 import csv
 import time
 import datetime
+import pandas as pd
+import pickle as pkl
 from icecream import ic
 from .IMUData import *
 from .GraphRegion import *
 from .IMUDataPlot import *
+from .config import FREQUENCY
 
 
 class IMUDataWidget:
@@ -60,6 +63,10 @@ class IMUDataWidget:
                     dpg.add_text(tag=self.output_tag, wrap=500, default_value="ExerSense Output:", show_label=False)
                     self.exercise_prototype.make_plot(show_data_table=False)
 
+            with dpg.group(horizontal=True):
+                dpg.add_slider_float(tag=f"{self.tag}_linearity_slider", label="Linearity", default_value=0.2, max_value=1.0, min_value=0.1, width=100, height=30)
+                dpg.add_slider_float(tag=f"{self.tag}_periodicty_slider", label="Periodicity", default_value=FREQUENCY/2, max_value=FREQUENCY, min_value=1.0, width=100, height=30)
+
             self.gyroscope.make_plot()
             self.accelerometer.make_plot()
 
@@ -110,36 +117,64 @@ class IMUDataWidget:
         #     raise e
         #     print(f"Exception updating region cuts: {e}")
         
-    def export_data(self):
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        file_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
-        imu_file_name = f"data/{self.device.name}_IMU_{file_time}.csv"
+    def export_data(self, out_dir="data"):
+        export_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
+        out_dir = f"{out_dir}/{export_time}"
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        data = {}
+        
+        # IMU DATA EXPORT
+        imu_columns = ["time", "accel_x", "accel_y", "accel_z", "gyr_x", "gyr_y", "gyr_z"]
+        imu_df = pd.DataFrame(columns=imu_columns)
+        imu_file_name = f"{out_dir}/{self.device.name}_IMU_{export_time}.csv"
         print(f"Exporting imu data to: {imu_file_name}")
-        with open(imu_file_name, 'w', newline='') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(["time", "accel_x", "accel_y", "accel_z", "gyr_x", "gyr_y", "gyr_z"])
-            for i in range(len(self.accelerometer.data)):
-                row = [self.accelerometer.data.t[i]]
-                row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
-                row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
-                csv_writer.writerow(row)
+        imu_df['time'] = self.accelerometer.data.t
+        imu_df['accel_x'] = self.accelerometer.data.x
+        imu_df['accel_y'] = self.accelerometer.data.y
+        imu_df['accel_z'] = self.accelerometer.data.z
+        imu_df['gyr_x'] = self.gyroscope.data.x
+        imu_df['gyr_y'] = self.gyroscope.data.y
+        imu_df['gyr_z'] = self.gyroscope.data.z
+        imu_df.to_csv(imu_file_name, index=False)
+        
+        # Gyr and Accel CUTS/REGIONS export
+        cuts_columns = ["xmin", "ymin", "xmax", "ymax"]
+        cuts_file_name = f"{{out_dir}}/{self.device.name}_cuts_{export_time}.csv"
+        cuts_df = pd.DataFrame(columns=cuts_columns)
+        print(f"Exporting cuts/regions data to: {cuts_file_name}")
+        for r in self.gyroscope.offset_cuts:
+            cuts_df['xmin'] = r.xmin
+            cuts_df['ymin'] = r.ymin
+            cuts_df['xmax'] = r.xmax
+            cuts_df['ymax'] = r.ymax
+        cuts_df.to_csv(cuts_file_name, index=False)
                 
-        proto_file_name = f"data/{self.device.name}_ExProto_{file_time}.csv"
+        # Prototype data export
+        proto_columns = ["time", "x", "y", "z", "w"]
+        proto_file_name = f"{out_dir}/{self.device.name}_proto_{export_time}.csv"
+        proto_df = pd.DataFrame(columns=proto_columns)
         print(f"Exporting exercises prototype data to: {proto_file_name}")
-        with open(proto_file_name, 'w', newline='') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(["time", "x", "y", "z", "proto_id"])
-            for i in range(len(self.exercise_prototype.data)):
-                row = [self.accelerometer.data.t[i]]
-                row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
-                row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
-                csv_writer.writerow(row)
+        proto_df['time'] = self.exercise_prototype.data.t
+        proto_df['x'] = self.exercise_prototype.data.x
+        proto_df['y'] = self.exercise_prototype.data.y
+        proto_df['z'] = self.exercise_prototype.data.z
+        proto_df['w'] = self.exercise_prototype.data.w
+        proto_df.to_csv(proto_file_name, index=False)
+        
+        data['imu'] = imu_df
+        data['cuts'] = cuts_df
+        data['proto'] = proto_df
+        pkl_export = f"{out_dir}/{self.device.name}_{export_time}.pkl"
+        print(f"Exporting pickle data to: {pkl_export}")
+        with open(pkl_export, "wb") as f:
+            pkl.dump(data, f)
 
         try:
             dpg.set_value(f"{self.tag}_exported_string", f"Last export: {imu_file_name} and {proto_file_name}")
         except Exception as e:
             pass
+        print("All exports completed!")
             
 
     def update(self, byte_data: bytearray, start_idx: int = 1):
@@ -182,23 +217,29 @@ class IMUDataWidget:
         gyr_region = dpg.get_value(self.gyroscope.drag_rect_tag)
         acc_region = dpg.get_value(self.accelerometer.drag_rect_tag)
         print(f"Detecting prototype from region. Gyr: [{gyr_region[0]}, {gyr_region[2]}], Acc: [{acc_region[0]}, {acc_region[2]}]")
+        linearity_threshold = dpg.get_value(f"{self.tag}_linearity_slider")
+        periodicity_threshold = dpg.get_value(f"{self.tag}_periodicty_slider")
         try:
-            cuts, prototype_vector = learner.detect_prototype(gyr_region[0], gyr_region[2])
-            
+            cuts, prototype_vector = learner.detect_prototype(gyr_region[0], gyr_region[2], linearity_threshold, periodicity_threshold)
             offset_cuts_gyr = []
             offset_cuts_acc = []
-            for i in range(len(cuts)-1):
-                offset_cuts_gyr.append([cuts[i], gyr_region[1], cuts[i+1], gyr_region[3]])
-                offset_cuts_acc.append([cuts[i], acc_region[1], cuts[i+1], acc_region[3]])
-            print(f"ExerSense Prototype Output: {offset_cuts_gyr}")
-            self.gyroscope.update_cuts(offset_cuts_gyr)
-            self.accelerometer.update_cuts(offset_cuts_acc)
-            for v in prototype_vector:
-                self.exercise_prototype.update(
-                    x=v[0],
-                    y=v[1],
-                    z=v[2]
-                )
+            if cuts is not None:
+                for i in range(len(cuts)-1):
+                    offset_cuts_gyr.append([cuts[i], gyr_region[1], cuts[i+1], gyr_region[3]])
+                    offset_cuts_acc.append([cuts[i], acc_region[1], cuts[i+1], acc_region[3]])
+                print(f"ExerSense Prototype Output: {offset_cuts_gyr}")
+                self.gyroscope.update_cuts(offset_cuts_gyr)
+                self.accelerometer.update_cuts(offset_cuts_acc)
+                
+            if prototype_vector is not None:
+                for v in prototype_vector:
+                    self.exercise_prototype.update(
+                        x=v[0],
+                        y=v[1],
+                        z=v[2],
+                        w=v[3]
+                    )
+            self.export_data()
         except Exception as e:
             print(f"Exception running exersense: {e}")
             raise e

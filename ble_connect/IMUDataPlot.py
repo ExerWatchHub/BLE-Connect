@@ -96,6 +96,8 @@ class IMUDataPlot:
         ymin, ymax = dpg.get_axis_limits(self.yaxis)
         if query_rect is None:
             query_rect = dpg.get_value(self.drag_rect_tag)
+        if query_rect is None:
+            return
         xmin = query_rect[0]
         xmax = query_rect[2]
         dpg.set_value(self.drag_rect_tag, (xmin, ymin, xmax, ymax))
@@ -104,6 +106,8 @@ class IMUDataPlot:
         self.show_data_table = show_data_table
 
         def query_handler(sender, query_rects, user_data):
+            print(sender)
+            print(user_data)
             if self.area_selection_enabled:
                 print(f"Query handler: {sender}, {query_rects}, {user_data}")
                 self.parent.gyroscope.update_query_rect(query_rects[0])
@@ -168,8 +172,8 @@ class IMUDataPlot:
             # print(f"Exception updating vline: {e}.")
             pass
 
-    def update(self, x: float = 0, y: float = 0, z: float = 0, refresh_plot: bool = True):
-        self.data.append(x, y, z)
+    def update(self, x: float = 0, y: float = 0, z: float = 0, refresh_plot: bool = True, w: float = None,):
+        self.data.append(x, y, z, w=w)
         if refresh_plot:
             self.update_plot()
             if self.show_data_table:
