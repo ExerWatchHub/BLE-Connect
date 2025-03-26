@@ -183,7 +183,7 @@ class IMUDataWidget:
         acc_region = dpg.get_value(self.accelerometer.drag_rect_tag)
         print(f"Detecting prototype from region. Gyr: [{gyr_region[0]}, {gyr_region[2]}], Acc: [{acc_region[0]}, {acc_region[2]}]")
         try:
-            cuts = learner.detect_prototype(gyr_region[0], gyr_region[2])
+            cuts, prototype_vector = learner.detect_prototype(gyr_region[0], gyr_region[2])
             
             offset_cuts_gyr = []
             offset_cuts_acc = []
@@ -193,8 +193,15 @@ class IMUDataWidget:
             print(f"ExerSense Prototype Output: {offset_cuts_gyr}")
             self.gyroscope.update_cuts(offset_cuts_gyr)
             self.accelerometer.update_cuts(offset_cuts_acc)
+            for v in prototype_vector:
+                self.exercise_prototype.update(
+                    x=v[0],
+                    y=v[1],
+                    z=v[2]
+                )
         except Exception as e:
             print(f"Exception running exersense: {e}")
+            raise e
             
     def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
         try:
