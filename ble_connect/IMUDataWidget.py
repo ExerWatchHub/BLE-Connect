@@ -3,22 +3,32 @@ import os
 import csv
 import time
 import datetime
+import pandas as pd
+import pickle as pkl
 from icecream import ic
 from .IMUData import *
 from .GraphRegion import *
 from .IMUDataPlot import *
+from .config import FREQUENCY
 
+class LocalFileMockDevice:
+    def __init__(self, address: str = "LOCAL_ADDRESS", name: str="MOCK_DEVICE"):
+        self.address = address
+        self.name = name
+        self.is_connected = True
+        
+def is_mock_device(device):
+    return isinstance(device, LocalFileMockDevice)
 
 class IMUDataWidget:
     total_widgets = 0
 
-    def __init__(self, app, device_widget, connect_button_callback, extra_id: str = "", show_imu_table: bool = False):
+    def __init__(self, app, device=None, connect_callback=None, extra_id: str = "", show_imu_table: bool = False):
         self.app = app
         self.themes = self.app.themes
-        self.device_widget = device_widget
-        self.device = device_widget.device
-        self.connect_button_callback = connect_button_callback
-        self.tag = f"{self.device.address}{extra_id}_imu_widget"
+        self.device = device if device is not None else LocalFileMockDevice()
+        self.connect_callback = connect_callback
+        self.tag = f"{self.device.address}_imu_widget{extra_id}"
         self.float_cell_width = 50
         self.name_cell_width = 100
         self.btn_tag = f"{self.tag}_button"
@@ -30,7 +40,33 @@ class IMUDataWidget:
         self.exercise_prototype: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_ex_proto", "Exercise Prototype", area_selection_enabled=False)
         self.show_imu_table = show_imu_table
         self.exercise_counter = 0
+        
+    def on_connect_clicked(self, sender, app_data):
+        if self.connect_callback is not None:
+            self.connect_callback(sender, app_data)
+        
+    def device_info(self):
+        with dpg.group(horizontal=True):
+            dpg.add_text(tag=f"{self.tag}_title", default_value=f"{self.device.name}")
+            dpg.add_text(tag=f"{self.tag}_address", default_value=f"{self.device.address}", wrap=500)
+            dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
 
+        # Cannot connect or export data from a mock device!
+        if is_mock_device(self.device):
+            return
+        
+        if self.show_imu_table:
+            self.imu_table()
+
+        with dpg.group(horizontal=True):
+            dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.on_connect_clicked, user_data=self.device, enabled=True, show=True, width=100, height=30)
+            dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
+            dpg.add_button(tag=self.clear_btn_tag, label="Clear", callback=self.clear_data, enabled=True, show=True, width=100, height=30)
+            with dpg.group():
+                dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
+                dpg.add_text(tag=f"{self.tag}_exported_string", default_value="Last export: None", wrap=500)
+                
+                
     def add_widget(self, container: str = None, separate_window: bool = False):
         print(f"Adding IMU Widget to {container}")
         if separate_window:
@@ -39,26 +75,16 @@ class IMUDataWidget:
         else:
             window = dpg.child_window(tag=self.tag, auto_resize_y=True, autosize_y=True, parent=container)
         with window:
-            with dpg.group(horizontal=True):
-                dpg.add_text(tag=f"{self.tag}_title", default_value=f"{self.device.name}")
-                dpg.add_text(tag=f"{self.tag}_address", default_value=f"{self.device.address}", wrap=500)
-                dpg.bind_item_font(f"{self.tag}_title", self.themes.title_font)
-
-            if self.show_imu_table:
-                self.imu_table()
-
-            with dpg.group(horizontal=True):
-                dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=True, width=100, height=30)
-                dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
-                dpg.add_button(tag=self.clear_btn_tag, label="Clear", callback=self.clear_data, enabled=True, show=True, width=100, height=30)
-                with dpg.group():
-                    dpg.add_text(tag=f"{self.tag}_imu_string", default_value="IMU Data", wrap=500)
-                    dpg.add_text(tag=f"{self.tag}_exported_string", default_value="Last export: None", wrap=500)
+            self.device_info()
             with dpg.child_window(height=400, width=-1, show=True) as wo:
                 dpg.bind_item_theme(wo, self.themes.exer_output_log)
                 with dpg.group(horizontal=True, width=-1, height=-1) as go:
                     dpg.add_text(tag=self.output_tag, wrap=500, default_value="ExerSense Output:", show_label=False)
                     self.exercise_prototype.make_plot(show_data_table=False)
+
+            with dpg.group(horizontal=True):
+                dpg.add_slider_float(tag=f"{self.tag}_linearity_slider", label="Linearity", default_value=0.2, max_value=1.0, min_value=0.1, width=100, height=30)
+                dpg.add_slider_float(tag=f"{self.tag}_periodicty_slider", label="Periodicity", default_value=FREQUENCY/2, max_value=FREQUENCY, min_value=1.0, width=100, height=30)
 
             self.gyroscope.make_plot()
             self.accelerometer.make_plot()
@@ -110,40 +136,73 @@ class IMUDataWidget:
         #     raise e
         #     print(f"Exception updating region cuts: {e}")
         
-    def export_data(self):
-        if not os.path.exists("data"):
-            os.makedirs("data")
-        file_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
-        imu_file_name = f"data/{self.device.name}_IMU_{file_time}.csv"
+        
+    def import_data(self, file_path_name):
+        print(f"Importing data from: {file_path_name}")
+        
+        
+    def export_data(self, out_dir="data"):
+        export_time = datetime.datetime.now().strftime("%d-%m_%H-%M")
+        out_dir = f"{out_dir}/{export_time}"
+        if not os.path.exists(out_dir):
+            os.makedirs(out_dir)
+        data = {}
+        
+        # IMU DATA EXPORT
+        imu_columns = ["time", "accel_x", "accel_y", "accel_z", "gyr_x", "gyr_y", "gyr_z"]
+        imu_df = pd.DataFrame(columns=imu_columns)
+        imu_file_name = f"{out_dir}/{self.device.name}_IMU_{export_time}.csv"
         print(f"Exporting imu data to: {imu_file_name}")
-        with open(imu_file_name, 'w', newline='') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(["time", "accel_x", "accel_y", "accel_z", "gyr_x", "gyr_y", "gyr_z"])
-            for i in range(len(self.accelerometer.data)):
-                row = [self.accelerometer.data.t[i]]
-                row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
-                row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
-                csv_writer.writerow(row)
+        imu_df['time'] = self.accelerometer.data.t
+        imu_df['accel_x'] = self.accelerometer.data.x
+        imu_df['accel_y'] = self.accelerometer.data.y
+        imu_df['accel_z'] = self.accelerometer.data.z
+        imu_df['gyr_x'] = self.gyroscope.data.x
+        imu_df['gyr_y'] = self.gyroscope.data.y
+        imu_df['gyr_z'] = self.gyroscope.data.z
+        imu_df.to_csv(imu_file_name, index=False)
+        
+        # Gyr and Accel CUTS/REGIONS export
+        cuts_columns = ["xmin", "ymin", "xmax", "ymax"]
+        cuts_file_name = f"{{out_dir}}/{self.device.name}_cuts_{export_time}.csv"
+        cuts_df = pd.DataFrame(columns=cuts_columns)
+        print(f"Exporting cuts/regions data to: {cuts_file_name}")
+        for r in self.gyroscope.offset_cuts:
+            cuts_df['xmin'] = r.xmin
+            cuts_df['ymin'] = r.ymin
+            cuts_df['xmax'] = r.xmax
+            cuts_df['ymax'] = r.ymax
+        cuts_df.to_csv(cuts_file_name, index=False)
                 
-        proto_file_name = f"data/{self.device.name}_ExProto_{file_time}.csv"
+        # Prototype data export
+        proto_columns = ["time", "x", "y", "z", "w"]
+        proto_file_name = f"{out_dir}/{self.device.name}_proto_{export_time}.csv"
+        proto_df = pd.DataFrame(columns=proto_columns)
         print(f"Exporting exercises prototype data to: {proto_file_name}")
-        with open(proto_file_name, 'w', newline='') as csvfile:
-            csv_writer = csv.writer(csvfile)
-            csv_writer.writerow(["time", "x", "y", "z", "proto_id"])
-            for i in range(len(self.exercise_prototype.data)):
-                row = [self.accelerometer.data.t[i]]
-                row += [self.accelerometer.data.x[i], self.accelerometer.data.y[i], self.accelerometer.data.z[i]]
-                row += [self.gyroscope.data.x[i], self.gyroscope.data.y[i], self.gyroscope.data.z[i]]
-                csv_writer.writerow(row)
+        proto_df['time'] = self.exercise_prototype.data.t
+        proto_df['x'] = self.exercise_prototype.data.x
+        proto_df['y'] = self.exercise_prototype.data.y
+        proto_df['z'] = self.exercise_prototype.data.z
+        proto_df['w'] = self.exercise_prototype.data.w
+        proto_df.to_csv(proto_file_name, index=False)
+        
+        data['imu'] = imu_df
+        data['cuts'] = cuts_df
+        data['proto'] = proto_df
+        pkl_export = f"{out_dir}/{self.device.name}_{export_time}.pkl"
+        print(f"Exporting pickle data to: {pkl_export}")
+        with open(pkl_export, "wb") as f:
+            pkl.dump(data, f)
 
         try:
             dpg.set_value(f"{self.tag}_exported_string", f"Last export: {imu_file_name} and {proto_file_name}")
         except Exception as e:
             pass
+        print("All exports completed!")
             
 
     def update(self, byte_data: bytearray, start_idx: int = 1):
-        if self.device_widget.is_connected:
+        if self.device.is_connected:
             dpg.configure_item(self.btn_tag, label="Disconnect")
         if byte_data is None:
             print(f"IMU Data is None!")
@@ -182,23 +241,29 @@ class IMUDataWidget:
         gyr_region = dpg.get_value(self.gyroscope.drag_rect_tag)
         acc_region = dpg.get_value(self.accelerometer.drag_rect_tag)
         print(f"Detecting prototype from region. Gyr: [{gyr_region[0]}, {gyr_region[2]}], Acc: [{acc_region[0]}, {acc_region[2]}]")
+        linearity_threshold = dpg.get_value(f"{self.tag}_linearity_slider")
+        periodicity_threshold = dpg.get_value(f"{self.tag}_periodicty_slider")
         try:
-            cuts, prototype_vector = learner.detect_prototype(gyr_region[0], gyr_region[2])
-            
+            cuts, prototype_vector = learner.detect_prototype(gyr_region[0], gyr_region[2], linearity_threshold, periodicity_threshold)
             offset_cuts_gyr = []
             offset_cuts_acc = []
-            for i in range(len(cuts)-1):
-                offset_cuts_gyr.append([cuts[i], gyr_region[1], cuts[i+1], gyr_region[3]])
-                offset_cuts_acc.append([cuts[i], acc_region[1], cuts[i+1], acc_region[3]])
-            print(f"ExerSense Prototype Output: {offset_cuts_gyr}")
-            self.gyroscope.update_cuts(offset_cuts_gyr)
-            self.accelerometer.update_cuts(offset_cuts_acc)
-            for v in prototype_vector:
-                self.exercise_prototype.update(
-                    x=v[0],
-                    y=v[1],
-                    z=v[2]
-                )
+            if cuts is not None:
+                for i in range(len(cuts)-1):
+                    offset_cuts_gyr.append([cuts[i], gyr_region[1], cuts[i+1], gyr_region[3]])
+                    offset_cuts_acc.append([cuts[i], acc_region[1], cuts[i+1], acc_region[3]])
+                print(f"ExerSense Prototype Output: {offset_cuts_gyr}")
+                self.gyroscope.update_cuts(offset_cuts_gyr)
+                self.accelerometer.update_cuts(offset_cuts_acc)
+                
+            if prototype_vector is not None:
+                for v in prototype_vector:
+                    self.exercise_prototype.update(
+                        x=v[0],
+                        y=v[1],
+                        z=v[2],
+                        w=v[3]
+                    )
+            self.export_data()
         except Exception as e:
             print(f"Exception running exersense: {e}")
             raise e

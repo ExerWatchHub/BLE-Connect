@@ -162,6 +162,7 @@ cython_debug/
 #.idea/
 exersens_learner.py
 exersense_learner.py
+exersense_tracker.py
 exersens_learner_org_q.py
 exersens_learner_org.py
 exersense_learner - Copy.py

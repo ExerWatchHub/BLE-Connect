@@ -31,8 +31,7 @@ class BLEDeviceWidget:
         self.on_click = None
         self.handler_registry = dpg.add_item_handler_registry()
         self.click_handler = -1
-        self.imu_data = IMUDataWidget(app, self, self.connect_button_callback)
-        # self.imu_data2 = IMUDataWidget(app, self, self.connect_button_callback, "copy")
+        self.imu_data = IMUDataWidget(app, self.device, connect_callback=self.connect_callback)
         self.device_processed = False
         self.is_exerwatch = False
         self.is_accepted_device = False
@@ -77,18 +76,16 @@ class BLEDeviceWidget:
     def foldout_info(self, container: str = None):
         container = self.foldout_container if container is None else container
         with dpg.group(parent=container, filter_key=f"{self.device.name}", horizontal=True, tag=self.foldout_tag) as grp:
-            dpg.add_button(tag=self.button_tag, label=f"Connect", callback=self.connect_button_callback, user_data=self.device, enabled=True, show=False)
+            dpg.add_button(tag=self.button_tag, label=f"Connect", callback=self.connect_callback, user_data=self.device, enabled=True, show=False)
             dpg.add_collapsing_header(label=f"{self.device.name} ({self.device.address})", tag=self.selectable_tag, closable=False, leaf=True)
 
         dpg.bind_item_handler_registry(self.selectable_tag, self.handler_registry)
         self.click_handler = dpg.add_item_clicked_handler(parent=self.handler_registry, callback=self.on_device_click)
         dpg.bind_item_theme(self.foldout_tag, self.themes.generic_device)
 
-    def connect_button_callback(self, sender="Internal", app_data=None, device=None):
+    def connect_callback(self, sender="Internal", app_data=None, device=None):
         if device is None:
             device = self.device
-        print(f"Sender: {sender}")
-        print(f"App Data: {app_data}")
         if self.is_connected:
             asyncio.run_coroutine_threadsafe(self.disconnect(device), self.app.bg_loop)
         else:
