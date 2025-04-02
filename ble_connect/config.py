@@ -1,3 +1,5 @@
+import asyncio
+
 FREQUENCY = 10 # Hz
 
 EXER_BLE_SERVICE_UUID = "EC4D35AE-96DC-4385-81B2-64A17E67B13D".upper()
@@ -12,10 +14,12 @@ WATCH_CHARACTERISTIC_UUID_TX: str = "6E400011-B5A3-F393-E0A9-E50E24DCCA9E"
 TEST_SERVICE_UUIDS = []
 SERVICE_UUID: str = "6e400001-b5a3-f393-e0a9-e50e24dcca9e".upper()  # UART service UUID
 
-FILTERED_DEVICES = ["ExerWatch80eb"]
-# FILTERED_DEVICES = ["ExerWatchccec"]
+FILTERED_DEVICES = []
+# FILTERED_DEVICES.append("ExerWatch80eb")
+# FILTERED_DEVICES.append("ExerWatchccec")
 
 FILTERED_DEVICES = [x.upper() for x in FILTERED_DEVICES]
 AUTO_CONNECT = True
+BG_LOOP = asyncio.new_event_loop()
 
 

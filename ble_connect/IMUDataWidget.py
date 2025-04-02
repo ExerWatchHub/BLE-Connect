@@ -10,28 +10,23 @@ from .IMUData import *
 from .GraphRegion import *
 from .IMUDataPlot import *
 from .config import FREQUENCY
+from .SensorDevice import LocalFileMockDevice, SensorDevice
 
-class LocalFileMockDevice:
-    def __init__(self, address: str = "LOCAL_ADDRESS", name: str="MOCK_DEVICE"):
-        self.address = address
-        self.name = name
-        self.is_connected = True
-        
 def is_mock_device(device):
     return isinstance(device, LocalFileMockDevice)
 
 class IMUDataWidget:
     total_widgets = 0
 
-    def __init__(self, app, device=None, connect_callback=None, extra_id: str = "", show_imu_table: bool = False):
+    def __init__(self, app, device=None, extra_id: str = "", show_imu_table: bool = False):
         self.app = app
         self.themes = self.app.themes
-        self.device = device if device is not None else LocalFileMockDevice()
-        self.connect_callback = connect_callback
+        self.device: SensorDevice = device if device is not None else LocalFileMockDevice()
         self.tag = f"{self.device.address}_imu_widget{extra_id}"
         self.float_cell_width = 50
         self.name_cell_width = 100
-        self.btn_tag = f"{self.tag}_button"
+        self.connect_btn_tag = f"{self.tag}_conect_button"
+        self.pause_btn_tag = f"{self.tag}_pause_button"
         self.output_tag = f"{self.tag}_output"
         self.export_btn_tag = f"{self.tag}_export_button"
         self.clear_btn_tag = f"{self.tag}_clear_button"
@@ -40,10 +35,6 @@ class IMUDataWidget:
         self.exercise_prototype: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_ex_proto", "Exercise Prototype", area_selection_enabled=False)
         self.show_imu_table = show_imu_table
         self.exercise_counter = 0
-        
-    def on_connect_clicked(self, sender, app_data):
-        if self.connect_callback is not None:
-            self.connect_callback(sender, app_data)
         
     def device_info(self):
         with dpg.group(horizontal=True):
@@ -59,7 +50,8 @@ class IMUDataWidget:
             self.imu_table()
 
         with dpg.group(horizontal=True):
-            dpg.add_button(tag=self.btn_tag, label="Connect", callback=self.on_connect_clicked, user_data=self.device, enabled=True, show=True, width=100, height=30)
+            dpg.add_button(tag=self.connect_btn_tag, label="Connect", callback=self.device.toggle_connect, user_data=self.device, enabled=True, show=True, width=100, height=30)
+            dpg.add_button(tag=self.pause_btn_tag, label="PAUSE", callback=self.toggle_processing, enabled=True, show=True, width=100, height=30)
             dpg.add_button(tag=self.export_btn_tag, label="Export", callback=self.export_data, enabled=True, show=True, width=100, height=30)
             dpg.add_button(tag=self.clear_btn_tag, label="Clear", callback=self.clear_data, enabled=True, show=True, width=100, height=30)
             with dpg.group():
@@ -123,6 +115,14 @@ class IMUDataWidget:
         dpg.set_value(f"{self.tag}_gyr_y", f"{gyr_y:.2f}")
         dpg.set_value(f"{self.tag}_gyr_z", f"{gyr_z:.2f}")
                 
+    def toggle_processing(self):
+        if self.device.is_paused:
+            self.device.is_paused = False
+            dpg.configure_item(self.pause_btn_tag, label="PAUSE")
+        else:
+            self.device.is_paused = True
+            dpg.configure_item(self.pause_btn_tag, label="RESUME")
+            
     def clear_data(self):
         self.accelerometer.reset()
         self.gyroscope.reset()
@@ -200,10 +200,19 @@ class IMUDataWidget:
             pass
         print("All exports completed!")
             
+    def on_disconnect(self):
+        dpg.configure_item(self.connect_btn_tag, label="Connect")
+        dpg.configure_item(self.pause_btn_tag, label="PAUSE", enabled=False)
+
+    def on_connect(self):
+        dpg.configure_item(self.connect_btn_tag, label="Disconnect")
+        dpg.configure_item(self.pause_btn_tag, label="PAUSE", enabled=True)
 
     def update(self, byte_data: bytearray, start_idx: int = 1):
+        if self.device.is_paused:
+            return
         if self.device.is_connected:
-            dpg.configure_item(self.btn_tag, label="Disconnect")
+            dpg.configure_item(self.connect_btn_tag, label="Disconnect")
         if byte_data is None:
             print(f"IMU Data is None!")
             return 
