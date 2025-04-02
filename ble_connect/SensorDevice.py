@@ -35,7 +35,7 @@ class SensorDevice(BLEDevice):
         if self.is_updated or self.is_connected:
             self.is_updating = False
             return
-        print(f"Updating device {self.name} {self.address}")
+        # print(f"Updating device {self.name} {self.address}")
 
         self.is_exerwatch = any(map(lambda x: x.upper() in [EXER_BLE_SERVICE_UUID]+TEST_SERVICE_UUIDS, data.service_uuids))
         if not self.is_exerwatch:

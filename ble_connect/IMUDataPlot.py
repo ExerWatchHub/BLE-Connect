@@ -7,6 +7,8 @@ from icecream import ic
 from .IMUData import *
 from .GraphRegion import *
 
+query_update_interval = 0.5  # seconds
+
 class IMUDataPlot:
     def __init__(self, parent, tag: str = "imu_plot", title="Time Series", area_selection_enabled=True):
         self.tag = tag
@@ -14,6 +16,7 @@ class IMUDataPlot:
         self.data: IMUData = IMUData()
         self.area_selection_enabled = area_selection_enabled
         self.title = title
+        self.has_query_rect = False
         self.title_short = f"{self.title[0:3]}."
         self.plot_areas_tag = f"{self.tag}_areas"
         self.drag_rect_tag = f"{self.tag}_drag_rect"
@@ -32,6 +35,7 @@ class IMUDataPlot:
         self.vlines = []
         self.region_idx = -1
         self.offset_cuts: list[GraphRegion] = []
+        self.last_query_update = time.time()
 
     def reset(self):
         self.data = IMUData()
@@ -106,18 +110,24 @@ class IMUDataPlot:
         self.show_data_table = show_data_table
 
         def query_handler(sender, query_rects, user_data):
-            print(sender)
-            print(user_data)
+            run_detection = True
+            try:
+                dpg.configure_item(self.parent.detect_button, enabled=True)
+                run_detection = dpg.get_value(self.parent.live_detect_checkbox)
+            except Exception as e:
+                print(f"Exception enabling detect button: {e}")
             if self.area_selection_enabled:
-                print(f"Query handler: {sender}, {query_rects}, {user_data}")
+                # print(f"Query handler: {sender}, {query_rects}, {user_data}")
                 self.parent.gyroscope.update_query_rect(query_rects[0])
                 self.parent.accelerometer.update_query_rect(query_rects[0])
-                self.parent.detect_prototype()
+                if run_detection:
+                    self.parent.detect_prototype()
 
-        def drag_rect_handler(*args, **kwargs):
-            if self.area_selection_enabled:
-                print(f"Drag rect handler: {args}, {kwargs}")
-                # print(f"Plot drag handler: {s}_{self.tag}, {a}")
+        def drop_handler(*args, **kwargs):
+            print(f"DROP handler: {args}, {kwargs}")
+
+        def drag_handler(*args, **kwargs):
+            print(f"DRAG handler: {args}, {kwargs}")
 
         with dpg.group(height=height, width=width) as grp:
             with dpg.group(horizontal=True, width=-1, height=-1, show=True):
@@ -127,7 +137,7 @@ class IMUDataPlot:
             with dpg.group(horizontal=self.show_data_table, width=-1, height=-1):
                 if self.show_data_table:
                     self.data_table()
-                with dpg.plot(tag=self.plot_tag, label=self.title, query=True, vertical_mod=False, query_toggle_mod=False, box_select_mod=False, callback=query_handler, **plot_kwargs):
+                with dpg.plot(tag=self.plot_tag, label=self.title, query=True, vertical_mod=False, query_toggle_mod=False, box_select_mod=False, callback=query_handler, drag_callback=drag_handler, drop_callback=drop_handler, ** plot_kwargs):
                     dpg.add_plot_legend()
                     dpg.add_plot_axis(dpg.mvXAxis, tag=self.xaxis, time=False)
                     dpg.add_plot_axis(dpg.mvYAxis, tag=self.yaxis)

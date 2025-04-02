@@ -11,6 +11,7 @@ from .GraphRegion import *
 from .IMUDataPlot import *
 from .config import FREQUENCY
 from .SensorDevice import LocalFileMockDevice, SensorDevice
+import importlib
 
 def is_mock_device(device):
     return isinstance(device, LocalFileMockDevice)
@@ -30,6 +31,8 @@ class IMUDataWidget:
         self.output_tag = f"{self.tag}_output"
         self.export_btn_tag = f"{self.tag}_export_button"
         self.clear_btn_tag = f"{self.tag}_clear_button"
+        self.detect_button = f"{self.tag}_detection"
+        self.live_detect_checkbox = f"{self.tag}_live_detection"
         self.gyroscope: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_gyro", "Gyroscope XYZ")
         self.accelerometer: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_accelerometer", "Accelerometer XYZ")
         self.exercise_prototype: IMUDataPlot = IMUDataPlot(self, f"{self.tag}_ex_proto", "Exercise Prototype", area_selection_enabled=False)
@@ -75,13 +78,17 @@ class IMUDataWidget:
                     self.exercise_prototype.make_plot(show_data_table=False)
 
             with dpg.group(horizontal=True):
+                dpg.add_button(tag=self.detect_button, label="Run Detection", callback=self.manual_detection, user_data=self.device, enabled=False, show=True, width=120, height=30)
+                dpg.add_checkbox(label="Live Detection", tag=self.live_detect_checkbox, default_value=True)
                 dpg.add_slider_float(tag=f"{self.tag}_linearity_slider", label="Linearity", default_value=0.2, max_value=1.0, min_value=0.1, width=100, height=30)
                 dpg.add_slider_float(tag=f"{self.tag}_periodicty_slider", label="Periodicity", default_value=FREQUENCY/2, max_value=FREQUENCY, min_value=1.0, width=100, height=30)
 
             self.gyroscope.make_plot()
             self.accelerometer.make_plot()
 
-
+    def manual_detection(self, sender, app_data):
+        self.detect_prototype(reload_module=True)
+        
     def imu_table(self):
         with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True, borders_innerV=True, borders_outerV=True, resizable=True, policy=dpg.mvTable_SizingStretchSame, no_host_extendX=True):
             dpg.add_table_column(width=self.name_cell_width)
@@ -241,9 +248,11 @@ class IMUDataWidget:
             print(f"Exception updating IMU PLOTS with data: {e}")
         self.run_exersense(acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z)
         
-    def detect_prototype(self):
+    def detect_prototype(self, reload_module=True):
         try:
             import exersense_learner as learner
+            if reload_module:
+                importlib.reload(learner)
         except Exception as e:
             print(f"Exception importing exersens_learner: {e}")
             return
