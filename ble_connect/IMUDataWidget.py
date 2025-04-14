@@ -250,11 +250,11 @@ class IMUDataWidget:
         
     def detect_prototype(self, reload_module=True):
         try:
-            import exersense_learner as learner
+            import exersense.exersense_offline as learner
             if reload_module:
                 importlib.reload(learner)
         except Exception as e:
-            print(f"Exception importing exersens_learner: {e}")
+            print(f"Exception importing exersense_learner: {e}")
             return
         gyr_region = dpg.get_value(self.gyroscope.drag_rect_tag)
         acc_region = dpg.get_value(self.accelerometer.drag_rect_tag)
@@ -288,12 +288,12 @@ class IMUDataWidget:
             
     def run_exersense(self, acc_x, acc_y, acc_z, gyr_x, gyr_y, gyr_z):
         try:
-            import exersense_learner as learner
+            import exersense.exersense_online as tracker
         except Exception as e:
-            print(f"Exception importing exersens_learner: {e}")
+            print(f"Exception importing exersense tracker: {e}")
             return
         try:
-            exer_out = learner.receive_data([(gyr_x, gyr_y, gyr_z)], [(acc_x, acc_y, acc_z)], [.1])
+            exer_out = tracker.receive_data([(gyr_x, gyr_y, gyr_z)], [(acc_x, acc_y, acc_z)], [.1])
         except Exception as e:
             print(f"Exception running exersense: {e}")
             return

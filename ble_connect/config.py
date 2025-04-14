@@ -15,8 +15,8 @@ TEST_SERVICE_UUIDS = []
 SERVICE_UUID: str = "6e400001-b5a3-f393-e0a9-e50e24dcca9e".upper()  # UART service UUID
 
 FILTERED_DEVICES = []
-# FILTERED_DEVICES.append("ExerWatch80eb")
-# FILTERED_DEVICES.append("ExerWatchccec")
+FILTERED_DEVICES.append("ExerWatch80eb")
+FILTERED_DEVICES.append("ExerWatchccec")
 
 FILTERED_DEVICES = [x.upper() for x in FILTERED_DEVICES]
 AUTO_CONNECT = True
