@@ -3,7 +3,26 @@ import asyncio
 import dearpygui.dearpygui as dpg
 import platform
 
-from .config import EXER_BLE_SERVICE_UUID, EXER_CHARACTERISTIC_UUID_TX, EXER_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_TX, TEST_SERVICE_UUIDS, FILTERED_DEVICES, AUTO_CONNECT, BG_LOOP
+from .config import EXER_BLE_SERVICE_UUID, EXER_CHARACTERISTIC_UUID_TX, EXER_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_RX, WATCH_CHARACTERISTIC_UUID_TX, TEST_SERVICE_UUIDS, FILTERED_DEVICES, AUTO_CONNECT, BG_LOOP, WIT_BLE_SERVICE_UUID, WIT_CHARACTERISTIC_UUID_TX, WIT_CHARACTERISTIC_UUID_RX
+
+class ExerDeviceStrategy:
+    def __init__(self):
+        self.characteristic_uuid_rx = EXER_CHARACTERISTIC_UUID_RX
+        self.characteristic_uuid_tx = EXER_CHARACTERISTIC_UUID_TX
+        
+    def process_data(self, byte_data: bytearray):
+        decoded = byte_data.decode('utf-8')
+        data = [float(i) for i in decoded.split(",")]
+        return data
+
+class WitDeviceStrategy:
+    def __init__(self):
+        self.characteristic_uuid_rx = WIT_CHARACTERISTIC_UUID_RX
+        self.characteristic_uuid_tx = WIT_CHARACTERISTIC_UUID_TX
+        
+    def process_data(self, byte_data: bytearray):
+        pass
+    
 
 
 class SensorDevice(BLEDevice):
@@ -15,6 +34,7 @@ class SensorDevice(BLEDevice):
             super(SensorDevice, self).__init__(address, name, None, rssi)
         self.ad_data: AdvertisementData = ad_data
         self.client: BleakClient = BleakClient(self.address)
+        self.strategy = None
         self.is_paused = False
         self.is_updated = False
         self.is_exerwatch = False
@@ -37,13 +57,22 @@ class SensorDevice(BLEDevice):
             return
         # print(f"Updating device {self.name} {self.address}")
 
-        self.is_exerwatch = any(map(lambda x: x.upper() in [EXER_BLE_SERVICE_UUID]+TEST_SERVICE_UUIDS, data.service_uuids))
-        if not self.is_exerwatch:
+        # self.is_exerwatch = any(map(lambda x: x.upper() in [EXER_BLE_SERVICE_UUID, WIT_BLE_SERVICE_UUID] + TEST_SERVICE_UUIDS, data.service_uuids))
+        self.is_exerwatch = EXER_BLE_SERVICE_UUID in list(map(lambda x: x.upper(), data.service_uuids))
+        self.is_wit = WIT_BLE_SERVICE_UUID in list(map(lambda x: x.upper(), data.service_uuids))
+        
+        if not self.is_exerwatch and self.is_wit:
             self.is_updated = True
             self.is_updating = False
             # print(f"Device {self.name} is NOT an ExerWatch device!")
             return
-
+        
+        if self.is_exerwatch:
+            self.strategy = ExerDeviceStrategy()
+        elif self.is_wit:
+            self.strategy = WitDeviceStrategy()    
+        
+            
         if FILTERED_DEVICES is None or len(FILTERED_DEVICES) <= 0:
             self.is_accepted_device = True
         else:
@@ -60,6 +89,7 @@ class SensorDevice(BLEDevice):
             self.is_updating = False
             print(f"Device {self.name} is already connected!")
             return
+        
         if not AUTO_CONNECT:
             self.is_updated = True
             self.is_updating = False
@@ -80,6 +110,7 @@ class SensorDevice(BLEDevice):
         self.is_updating = False
 
     def notification_handler(self, characteristic: BleakGATTCharacteristic, data: bytearray):
+        print(f"Notification from {self.name} on characteristic {characteristic.uuid}: {data}")
         self.widget.on_notification(characteristic, data)
 
     def toggle_connect(self):
@@ -89,7 +120,7 @@ class SensorDevice(BLEDevice):
             asyncio.run_coroutine_threadsafe(self.connect(), BG_LOOP)
 
     async def disconnect(self):
-        await self.client.stop_notify(EXER_CHARACTERISTIC_UUID_TX)
+        await self.client.stop_notify(self.strategy.characteristic_uuid_tx)
         await self.client.disconnect()
         self.is_connected = False
         if self.widget is not None:
@@ -110,6 +141,7 @@ class SensorDevice(BLEDevice):
         if self.widget is not None:
             self.widget.on_connect()   
 
+        print(f"Starting notifications for gatt '{self.strategy.characteristic_uuid_tx}'...")
         await self.start_notifications()
         await self.send_name_to_device()
 
@@ -117,9 +149,9 @@ class SensorDevice(BLEDevice):
     async def start_notifications(self):
         try:
             # Start receiving notifications on the GATT characteristic advertising the sensor's IMU data
-            await self.client.start_notify(EXER_CHARACTERISTIC_UUID_TX, self.notification_handler)
+            await self.client.start_notify(self.strategy.characteristic_uuid_tx, self.notification_handler)
         except Exception as e:
-            print(f"Exception starting notificaitons for gatt '{EXER_CHARACTERISTIC_UUID_TX}': {e}")
+            print(f"Exception starting notificaitons for gatt '{self.strategy.characteristic_uuid_tx}': {e}")
             
     async def send_name_to_device(self):
         device_name = platform.node() # Get the name of this device (e.g. the macbook's name)
@@ -132,13 +164,19 @@ class SensorDevice(BLEDevice):
             print(f"Exception writing to gatt '{WATCH_CHARACTERISTIC_UUID_RX}': {e}")
             
         try:
-            await self.client.write_gatt_char(EXER_CHARACTERISTIC_UUID_RX, bytearray(f"n{device_name}", "utf-8"))
+            await self.client.write_gatt_char(self.characteristic_uuid_rx, bytearray(f"n{device_name}", "utf-8"))
             descriptors = self.client.services.descriptors
         except Exception as e:
-            print(f"Exception writing to gatt '{EXER_CHARACTERISTIC_UUID_RX}': {e}")
+            print(f"Exception writing to gatt '{self.characteristic_uuid_rx}': {e}")
 
         if self.widget is not None:
             self.widget.on_services_discovered(characteristics, descriptors)
+            
+    
+    def process_data(self, byte_data: bytearray):
+        if self.strategy:
+            return self.strategy.process_data(byte_data)
+        return None
 
 
 class LocalFileMockDevice(SensorDevice):

@@ -26,7 +26,7 @@ class IMUDataWidget:
         self.tag = f"{self.device.address}_imu_widget{extra_id}"
         self.float_cell_width = 50
         self.name_cell_width = 100
-        self.connect_btn_tag = f"{self.tag}_conect_button"
+        self.connect_btn_tag = f"{self.tag}_connect_button"
         self.pause_btn_tag = f"{self.tag}_pause_button"
         self.output_tag = f"{self.tag}_output"
         self.export_btn_tag = f"{self.tag}_export_button"
@@ -224,8 +224,10 @@ class IMUDataWidget:
             print(f"IMU Data is None!")
             return 
         try:
-            decoded = byte_data.decode('utf-8')
-            data = [float(i) for i in decoded.split(",")]
+            data = self.device.process_data(byte_data)
+            if data is None:
+                print(f"Processed IMU Data is None!")
+                return
             acc_x = data[start_idx]
             acc_y = data[start_idx+1]
             acc_z = data[start_idx+2]
